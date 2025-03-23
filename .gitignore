@@ -8,3 +8,5 @@ taming/
 results*
 *.pyc
 *.wav
+weights
+*.pt
