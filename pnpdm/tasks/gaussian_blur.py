@@ -30,6 +30,8 @@ class GaussialBlurCircular(LinearOperator):
         return 'gblur-circ'
 
     def forward(self, x, **kwargs):
+        print("self.full_spectrum shape:", self.full_spectrum.shape)
+        print("fft2(x) shape:", fft2(x).shape)
         return fftshift(ifft2(self.full_spectrum * fft2(x)).real, dim=(-2,-1))
 
     def transpose(self, y):

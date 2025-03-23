@@ -189,8 +189,25 @@ class GaussianNoise(Noise):
             print(f'input snr mode of gaussian noise: {scale} in input sigma')
             return data + scaled_noise
 
+__METRICS__ = {}
+
+def register_metrics(name: str):
+    def wrapper(cls):
+        if __METRICS__.get(name, None):
+            raise NameError(f"Name {name} is already registered!")
+        __METRICS__[name] = cls
+        return cls
+    return wrapper
+
+
+def get_metrics(name: str, **kwargs):
+    if __METRICS__.get(name, None) is None:
+        raise NameError(f"Name {name} is not defined.")
+    return __METRICS__[name](**kwargs)
+
 from .gaussian_blur import GaussialBlurCircular
 from .motion_blur import MotionBlurCircular
 from .super_resolution_svd import SuperResolution
 from .coded_diffraction_patterns import CodedDiffractionPatterns
 from .phase_retrieval import PhaseRetrieval
+from .source_separation import SourceSeparation

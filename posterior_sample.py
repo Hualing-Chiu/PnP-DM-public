@@ -2,15 +2,18 @@ import torch, os, hydra, logging
 import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
+from typing import List, Optional, Dict, Tuple
 from collections import defaultdict
 from torchvision import transforms
 from pnpdm.data import get_dataset, get_dataloader
-from pnpdm.tasks import get_operator, get_noise, MotionBlurCircular
+from pnpdm.tasks import get_operator, get_noise, get_metrics, MotionBlurCircular
 from pnpdm.models import get_model
 from pnpdm.samplers import get_sampler
 from hydra.core.hydra_config import HydraConfig
 from monai.metrics import PSNRMetric, SSIMMetric
 from taming.modules.losses.lpips import LPIPS
+from pnpdm.improved_diffusion.inference_utils import calculate_all_metrics, log_results
+from pnpdm.improved_diffusion.metrics import Metric
 
 @hydra.main(version_base="1.2", config_path="configs", config_name="default")
 def posterior_sample(cfg):
@@ -19,7 +22,6 @@ def posterior_sample(cfg):
     task_config = cfg.task
     model_config = cfg.model
     sampler_config = cfg.sampler
-
     # device setting
     device_str = f"cuda:{cfg.gpu}" if torch.cuda.is_available() else 'cpu'
     device = torch.device(device_str)
@@ -27,215 +29,155 @@ def posterior_sample(cfg):
     # prepare task (forward model and noise)
     operator = get_operator(**task_config.operator, device=device)
     noiser = get_noise(**task_config.noise)
+    metrics = get_metrics(**task_config.metrics)
+    print(f"metrics: {metrics}")
 
     # prepare dataloader
-    transform = transforms.Compose([
-        transforms.Normalize((0.5), (0.5))
-    ])
-    inv_transform = transforms.Compose([
-        transforms.Normalize((-1), (2)),
-        transforms.Lambda(lambda x: x.clamp(0, 1).detach())
-    ])
+    # transform = transforms.Compose([
+    #     transforms.Resize((256, 256)),
+    #     transforms.Normalize((0.5), (0.5))
+    # ])
     # inv_transform = transforms.Compose([
     #     transforms.Normalize((-1), (2)),
-    #     transforms.Lambda(lambda x: (x.clamp(0, 1)**0.4).detach())
+    #     transforms.Lambda(lambda x: x.clamp(0, 1).detach())
     # ])
-    dataset = get_dataset(**data_config, transform=transform)
-    num_test_images = len(dataset)
-    dataloader = get_dataloader(dataset, batch_size=1, num_workers=0, train=False)
+    
+    # dataset = get_dataset(**data_config, transform=transform)
+    # num_test_images = len(dataset)
+    # dataloader = get_dataloader(dataset, batch_size=1, num_workers=0, train=False)
 
+    # source separation load data
+    if task_config.operator.name == "source_separation":
+        audio_files = [list(map(lambda x: os.path.join(d, x), os.listdir(d))) for d in data_config.root] # List[str]
+
+    files_dict = prepara_data(audio_files)
     # load model
     model = get_model(**model_config)
     model = model.to(device)
     model.eval()
 
+    # load ddpm
+    diffusion = hydra.utils.call(cfg.diffusion) # GaussianDiffusion
     # load sampler
-    sampler = get_sampler(sampler_config, model=model, operator=operator, noiser=noiser, device=device)
+    sampler = get_sampler(sampler_config, model=model, diffusion=diffusion, degradation=degradation, operator=operator, noiser=noiser, device=device)
 
-    # working directory
-    exp_name = '_'.join([dataset.display_name, operator.display_name, noiser.display_name, sampler.display_name])
-    exp_name += '' if len(cfg.add_exp_name) == 0 else '_' + cfg.add_exp_name
-    logger = logging.getLogger(exp_name)
-    out_path = os.path.join("results", exp_name)
-    os.makedirs(out_path, exist_ok=True)
-    for img_dir in ['gt', 'meas', 'recon', 'progress']:
-        os.makedirs(os.path.join(out_path, img_dir), exist_ok=True)
-        
     # inference
-    meta_log = defaultdict(list)
-    meta_log["statistics_based_on_one_sample"] = defaultdict(list)
-    meta_log["statistics_based_on_mean"] = defaultdict(list)
-    metrics = {
-        'psnr': PSNRMetric(max_val=1),
-        'ssim': SSIMMetric(spatial_dims=2),
-        'lpips': LPIPS().to(device).eval(),
-    }
-    for i, ref_img in enumerate(dataloader):
-        logger.info(f"Inference for image {i} on device {device_str}")
-        file_idx = f"{i:05d}"
-        ref_img = ref_img.to(device)
-        cmap = 'gray' if ref_img.shape[1] == 1 else None
+    output_dir = os.path.join("results", task_config.operator.name)
+    generated_path = os.path.join(output_dir, "generated")
+    original_path = os.path.join(output_dir, "results")
+    degraded_path = os.path.join(output_dir, "degraded")
+    for path in [generated_path, original_path, degraded_path]:
+        if not exists(path):
+            os.makedirs(path)
 
-        # regenerate kernel for motion blur
-        if isinstance(operator, MotionBlurCircular):
-            operator.generate_kernel_(seed=i)
+    # inference
+    fake_samples = []
+    real_samples = []
+    files_key = list(files_dict.keys())
 
-        # forward measurement model (Ax + n)
-        y_n = noiser(operator.forward(ref_img))
+    for i, f in enumerate(zip(*files_dict.values())):
+        x = load_audios(f, 16000, None, "cpu")
+        x = prepare_audio_before_degradation(x)
+        degraded_sample = degradation(x).cpu() # y_n
 
-        # logging
-        log = defaultdict(list)
-        log["consistency_gt"] = torch.norm(operator.forward(ref_img) - y_n).item()
-        log["gt"] = inv_transform(ref_img).permute(0, 2, 3, 1).squeeze().cpu().numpy()
-        plt.imsave(os.path.join(out_path, 'gt', file_idx+'.png'), log["gt"], cmap=cmap)
-        try:
-            log["meas"] = inv_transform(y_n.reshape(*ref_img.shape)).permute(0, 2, 3, 1).squeeze().cpu().numpy()
-            # log["meas"] = inv_transform(operator.forward(ref_img)).permute(0, 2, 3, 1).squeeze().cpu().numpy()
-            plt.imsave(os.path.join(out_path, 'meas', file_idx+'.png'), log["meas"], cmap=cmap)
-            if hasattr(operator, 'kernel'):
-                plt.imsave(os.path.join(out_path, 'meas', file_idx+'_kernel.png'), operator.kernel.detach().cpu())
-        except:
-            try:
-                # in case where y_n is bigger than ref_img
-                log["meas"] = inv_transform(y_n).permute(0, 2, 3, 1).squeeze().cpu().numpy()
-                plt.imsave(os.path.join(out_path, 'meas', file_idx+'.png'), log["meas"], cmap=cmap)
-            except:
-                log["meas"] = inv_transform(operator.A_pinv(y_n).reshape(*ref_img.shape)).permute(0, 2, 3, 1).squeeze().cpu().numpy()
-                plt.imsave(os.path.join(out_path, 'meas', file_idx+'_pinv.png'), log["meas"], cmap=cmap)
-        
         # sampling
-        for j in tqdm(range(cfg.num_runs)):
-            samples = sampler(
-                gt=ref_img, 
-                y_n=y_n, 
-                record=cfg.record, 
-                fname=file_idx+f'_run_{j}', 
-                save_root=out_path, 
-                inv_transform=inv_transform, 
-                metrics=metrics
+        for _ in tqdm(range(cfg.num_runs)):
+            sample = sampler(
+                g_x=x,
+                y_n=degraded_sample,
+                record=cfg.record,
+                save_root=generated_path
             )
-            samples = inv_transform(samples)
-            sample = samples[[-1]] # take the last sample as the single sample for calculating metrics
-            if len(samples) > 1:
-                mean, std = torch.mean(samples, dim=0, keepdim=True), torch.std(samples, dim=0, keepdim=True)
 
-            # logging
-            log["samples"].append(sample.permute(0, 2, 3, 1).squeeze().cpu().numpy())
-            for name, metric in metrics.items():
-                log[name+"_sample"].append(metric(sample, inv_transform(ref_img)).item())
-            log["consistency_sample"].append(torch.norm(operator.forward(transform(sample)) - y_n).item())
-            plt.imsave(os.path.join(out_path, 'recon', file_idx+f'_run_{j}_sample.png'), log["samples"][-1], cmap=cmap)
+        x = x.cpu()
+        real_samples.append(x)
+        generated_samples.append(sample)
 
-            if len(samples) > 1:
-                log["means"].append(mean.permute(0, 2, 3, 1).squeeze().cpu().numpy())
-                log["stds"].append(std.permute(0, 2, 3, 1).squeeze().cpu().numpy())
-                for name, metric in metrics.items():
-                    log[name+"_mean"].append(metric(mean, inv_transform(ref_img)).item())
-                log["consistency_mean"].append(torch.norm(operator.forward(transform(mean)) - y_n).item())
-                plt.imsave(os.path.join(out_path, 'recon', file_idx+f'_run_{j}_mean.png'), log["means"][-1], cmap=cmap)
-                # plt.imsave(os.path.join(out_path, 'recon', file_idx+f'_run_{j}_std.png'), log["stds"][-1], cmap=cmap)
+        save_audios(sample, degraded_sample, x, i, len(audio_files), sr=16000)
 
-        np.save(os.path.join(out_path, 'recon', file_idx+'_log.npy'), log)
+        del sample, x, degraded_sample
+        torch.cuda.empty_cache()
 
-        with open(os.path.join(out_path, 'recon', file_idx+'_metrics.txt'), "w") as f:
-            f.write(f'Statistics based on ONE sample for each run ({cfg.num_runs} runs in total):\n')
-            f.write('\n')
-            for name, _ in metrics.items():
-                f.write(f'{name} (avg over {cfg.num_runs} runs): {np.mean(log[name+"_sample"])}\n')
-            f.write(f'consistency_sample (avg over {cfg.num_runs} runs): {np.mean(log["consistency_sample"])}\n')
-            f.write('\n')
-            for name, _ in metrics.items():
-                best_fn = np.amin if name == 'lpips' else np.amax
-                f.write(f'{name} (best among {cfg.num_runs} runs): {best_fn(log[name+"_sample"])}\n')
-            f.write(f'consistency_sample (best among {cfg.num_runs} runs): {np.amin(log["consistency_sample"])}\n')
-            if len(samples) > 1:
-                f.write('\n')
-                f.write('='*70+'\n')
-                f.write('\n')
-                f.write(f'Statistics based on the mean over {len(samples)} samples for each run ({cfg.num_runs} runs in total):\n')
-                f.write('\n')
-                for name, _ in metrics.items():
-                    f.write(f'{name} (avg over {cfg.num_runs} runs): {np.mean(log[name+"_mean"])}\n')
-                f.write(f'consistency_mean (avg over {cfg.num_runs} runs): {np.mean(log["consistency_mean"])}\n')
-                f.write('\n')
-                for name, _ in metrics.items():
-                    best_fn = np.amin if name == 'lpips' else np.amax
-                    f.write(f'{name} (best among {cfg.num_runs} runs): {best_fn(log[name+"_mean"])}\n')
-                f.write(f'consistency_mean (best among {cfg.num_runs} runs): {np.amin(log["consistency_mean"])}\n')
-            f.write('\n')
-            f.write('='*70+'\n')
-            f.write('\n')
-            f.write(f'consistency (gt): {log["consistency_gt"]}\n')
-            f.close()
+    scores = calculate_all_metrics(
+        generated_samples, List[Metric], reference_wavs=real_samples
+    )
+    log_results(results_dir=output_dir, res=scores)
 
-        # meta logging
-        meta_log["consistency_gt"].append(log["consistency_gt"])
-        sample_recon_mean = torch.mean(torch.from_numpy(np.array(log["samples"])), dim=0)
-        if len(sample_recon_mean.shape) == 2:
-            sample_recon_mean = sample_recon_mean.unsqueeze(2) # add a channel dimension
-        sample_recon_mean = sample_recon_mean.permute(2, 0, 1).unsqueeze(0).to(device)
-        for name, metric in metrics.items():
-            meta_log["statistics_based_on_one_sample"][name+"_mean_recon_of_all_runs"].append(metric(sample_recon_mean, inv_transform(ref_img)).item())
-            meta_log["statistics_based_on_one_sample"][name+"_last_of_all_runs"].append(log[name+"_sample"][-1])
-            best_fn = np.amin if name == 'lpips' else np.amax
-            meta_log["statistics_based_on_one_sample"][name+"_best_of_all_runs"].append(best_fn(log[name+"_sample"]))
-        meta_log["statistics_based_on_one_sample"]["consistency_mean_recon_of_all_runs"].append(torch.norm(operator.forward(transform(sample_recon_mean)) - y_n).item())
-        meta_log["statistics_based_on_one_sample"]["consistency_last_of_all_runs"].append(log["consistency_sample"][-1])
-        meta_log["statistics_based_on_one_sample"]["consistency_best_of_all_runs"].append(np.amin(log["consistency_sample"]))
-        if len(samples) > 1:
-            mean_recon_mean = torch.mean(torch.from_numpy(np.array(log["means"])), dim=0)
-            if len(mean_recon_mean.shape) == 2:
-                mean_recon_mean = mean_recon_mean.unsqueeze(2) # add a channel dimension
-            mean_recon_mean = mean_recon_mean.permute(2, 0, 1).unsqueeze(0).to(device)
-            for name, metric in metrics.items():
-                meta_log["statistics_based_on_mean"][name+"_mean_recon_of_all_runs"].append(metric(mean_recon_mean, inv_transform(ref_img)).item())
-                meta_log["statistics_based_on_mean"][name+"_last_of_all_runs"].append(log[name+"_mean"][-1])
-                best_fn = np.amin if name == 'lpips' else np.amax
-                meta_log["statistics_based_on_mean"][name+"_best_of_all_runs"].append(best_fn(log[name+"_mean"]))
-            meta_log["statistics_based_on_mean"]["consistency_mean_recon_of_all_runs"].append(torch.norm(operator.forward(transform(mean_recon_mean)) - y_n).item())
-            meta_log["statistics_based_on_mean"]["consistency_last_of_all_runs"].append(log["consistency_mean"][-1])
-            meta_log["statistics_based_on_mean"]["consistency_best_of_all_runs"].append(np.amin(log["consistency_mean"]))
+def exists(path: str):
+        return os.path.exists(path)
 
-    # meta logging
-    np.save(os.path.join(out_path, 'meta_log.npy'), meta_log)
-    with open(os.path.join(out_path, 'meta_metrics.txt'), "w") as f:
-        f.write(f'Statistics based on ONE sample for each run ({cfg.num_runs} runs in total) of each test image:\n')
-        f.write('\n')
-        for name, _ in metrics.items():
-            f.write(f'{name}_mean_recon_of_{cfg.num_runs}_runs (avg over {num_test_images} test images): {np.mean(meta_log["statistics_based_on_one_sample"][name+"_mean_recon_of_all_runs"])}\n')
-        f.write(f'consistency_mean_recon_of_{cfg.num_runs}_runs (avg over {num_test_images} test images): {np.mean(meta_log["statistics_based_on_one_sample"]["consistency_mean_recon_of_all_runs"])}\n')
-        f.write('\n')
-        for name, _ in metrics.items():
-            f.write(f'{name}_last_of_{cfg.num_runs}_runs (avg over {num_test_images} test images): {np.mean(meta_log["statistics_based_on_one_sample"][name+"_last_of_all_runs"])}\n')
-        f.write(f'consistency_last_of_all_runs (avg over {num_test_images} test images): {np.mean(meta_log["statistics_based_on_one_sample"]["consistency_last_of_all_runs"])}\n')
-        f.write('\n')
-        for name, _ in metrics.items():
-            f.write(f'{name}_best_of_{cfg.num_runs}_runs (avg over {num_test_images} test images): {np.mean(meta_log["statistics_based_on_one_sample"][name+"_best_of_all_runs"])}\n')
-        f.write(f'consistency_best_of_all_runs (avg over {num_test_images} test images): {np.mean(meta_log["statistics_based_on_one_sample"]["consistency_best_of_all_runs"])}\n')
-        if len(samples) > 1:
-            f.write('\n')
-            f.write('='*70+'\n')
-            f.write('\n')
-            f.write(f'Statistics based on the mean over {len(samples)} samples for each run ({cfg.num_runs} runs in total) of each test image:\n')
-            f.write('\n')
-            for name, _ in metrics.items():
-                f.write(f'{name}_mean_recon_of_{cfg.num_runs}_runs (avg over {num_test_images} test images): {np.mean(meta_log["statistics_based_on_mean"][name+"_mean_recon_of_all_runs"])}\n')
-            f.write(f'consistency_mean_recon_of_{cfg.num_runs}_runs (avg over {num_test_images} test images): {np.mean(meta_log["statistics_based_on_mean"]["consistency_mean_recon_of_all_runs"])}\n')
-            f.write('\n')
-            for name, _ in metrics.items():
-                f.write(f'{name}_last_of_{cfg.num_runs}_runs (avg over {num_test_images} test images): {np.mean(meta_log["statistics_based_on_mean"][name+"_last_of_all_runs"])}\n')
-            f.write(f'consistency_last_of_all_runs (avg over {num_test_images} test images): {np.mean(meta_log["statistics_based_on_mean"]["consistency_last_of_all_runs"])}\n')
-            f.write('\n')
-            for name, _ in metrics.items():
-                f.write(f'{name}_best_of_{cfg.num_runs}_runs (avg over {num_test_images} test images): {np.mean(meta_log["statistics_based_on_mean"][name+"_best_of_all_runs"])}\n')
-            f.write(f'consistency_best_of_all_runs (avg over {num_test_images} test images): {np.mean(meta_log["statistics_based_on_mean"]["consistency_best_of_all_runs"])}\n')
-        f.write('\n')
-        f.write('='*70+'\n')
-        f.write('\n')
-        f.write(f'consistency (gt) (avg over {num_test_images} test images): {np.mean(meta_log["consistency_gt"])}\n')
-        f.close()
+def prepara_data(audio_files: List[str]):
+    filtered_mic2_audio_files = [[file for file in files if "mic1" in file] for files in audio_files]
+    # filtered_audio_files = [[file for file in files if file.endswith('wav')] for files in audio_files]
+    n_samples = min([len(files) for files in filtered_mic2_audio_files])
 
-    logger.info(f"Finished inference")
+    return {f"spk{i}": random.sample(files, k=n_samples)  for i, files in enumerate(filtered_mic2_audio_files)}
+
+def prepare_audio_before_degradation(x: List[torch.Tensor]) -> torch.Tensor:
+    min_sample_length = min(map(lambda tensor: tensor.size(-1), x))
+    truncated_x = list(map(lambda tensor: tensor[..., :min_sample_length], x))
+    return torch.cat(truncated_x, dim=0) # dim=-1 to dim=0
+
+def load_audio(
+    path: str,
+    target_sample_rate: int = 16000,
+    segment_size: Optional[int] = None,
+    device: str = 'cpu'
+) -> torch.Tensor:
+    print(path)
+    x, sr = torchaudio.load(path)
+    x = torchaudio.functional.resample(x, sr, target_sample_rate)
+    if segment_size is not None:
+        x = cut_audio_segment(x, segment_size)
+    x = torchaudio.functional.vad(x, target_sample_rate)
+    x = x.to(device).unsqueeze(0)
+    return x
+
+def load_audios(paths: List[str], *args, **kwargs) -> List[torch.Tensor]:
+    return [self.load_audio(p, *args, **kwargs) for p in paths]
+
+def save_audios(
+    self,
+    pred_sample: torch.Tensor,
+    degraded_sample: torch.Tensor,
+    original_sample: torch.Tensor,
+    idx: int,
+    n_spk: int,
+    sr: int = 16000,
+):
+    pred_chunked = torch.chunk(
+        pred_sample, chunks=n_spk, dim=0 # dim=0 -> batch # modify
+    )  # explicit number of chunks 2
+    orig_chunked = torch.chunk(
+        original_sample, chunks=n_spk, dim=0
+    )  # explicit number of chunks 2
+    for i, (cur_pred, cur_orig) in enumerate(zip(pred_chunked, orig_chunked)):
+        name = f"Sample_{idx}_{i + 1}.wav"
+        torchaudio.save(
+            os.path.join(self.generated_path, name), cur_pred.view(1, -1), sr
+        )
+        torchaudio.save(
+            os.path.join(self.original_path, name), cur_orig.view(1, -1), sr
+        )
+    
+    # concate the separate audio
+    concatenated_pred = torch.cat(pred_chunked, dim=-1)
+    name = f"Sample_{idx}.wav"
+    torchaudio.save(
+        os.path.join(self.concatenate_path, name), concatenated_pred.view(1, -1), sr
+    )
+
+    # redefine name for degraded
+    name = f"Sample_{idx}.wav"
+    torchaudio.save(
+        os.path.join(self.degraded_path, name), degraded_sample.view(1, -1), sr
+    )
+
+def degradation(x: torch.Tensor) -> torch.Tensor:
+    return torch.stack([s for s in torch.chunk(x, 2, dim=0)]).sum(0)
 
 if __name__ == '__main__':
-    posterior_sample()
+    try:
+        posterior_sample()
+    except Exception as e:
+        print(f"Error: {e}")

@@ -6,3 +6,5 @@ outputs/
 *.png
 taming/
 results*
+*.pyc
+*.wav

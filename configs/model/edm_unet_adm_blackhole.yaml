@@ -16,7 +16,7 @@ dropout: 0.0
 resblock_updown: True
 use_fp16: False
 use_new_attention_order: False
-model_path: path/to/blackhole.pt
+model_path: /home/hualing/PnP-DM-public/pnpdm/models/blackhole.pt
 grayscale: True
 
 diffusion:

@@ -1,0 +1,5 @@
+name: vctk
+
+root:
+  -/home/public_datasets/VCTK-Corpus-0.92/wav48_silence_trimmed/p254
+  -/home/public_datasets/VCTK-Corpus-0.92/wav48_silence_trimmed/p248

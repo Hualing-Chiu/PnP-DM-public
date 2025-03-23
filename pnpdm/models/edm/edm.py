@@ -68,6 +68,7 @@ def load_yaml(file_path: str) -> dict:
 
 def create_edm_from_unet_adm(**kwargs):
     diffusion_config = kwargs['diffusion']
+    print(diffusion_config)
     kwargs.pop('diffusion')
     model = create_unet_adm(**kwargs)
     wrapped_model = VPPrecond(model, **diffusion_config, **kwargs)

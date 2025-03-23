@@ -1,0 +1,16 @@
+name: pnp_ddpm
+num_iters: 100
+num_burn_in_iters: 40
+rho: 0.1
+rho_decay_rate: 1.0
+rho_min: 0.0
+num_samples_per_run: 20
+common_kwargs:
+  num_steps: 100
+  sigma_min: null
+  sigma_max: null
+  alpha: 1
+  S_churn: 0
+  S_min: 0
+  S_max: !!float .inf
+  S_noise: 1

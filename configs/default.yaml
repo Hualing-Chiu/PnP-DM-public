@@ -1,4 +1,4 @@
 gpu: 0
-add_exp_name: ''
+add_exp_name: 
 num_runs: 1
 record: false

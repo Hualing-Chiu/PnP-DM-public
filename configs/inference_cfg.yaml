@@ -1,0 +1,14 @@
+defaults:
+  - task: source_separation
+  - model: diffwave
+  - diffusion: gaussian_diffusion
+  - _self_
+
+output_dir: results/source_separation
+audio_dir: 
+  - /home/public_datasets/VCTK-Corpus-0.92/wav48_silence_trimmed/p254
+  - /home/public_datasets/VCTK-Corpus-0.92/wav48_silence_trimmed/p248
+use_ema: false
+segment_size: null
+sampling_rate: 16000
+device: cuda

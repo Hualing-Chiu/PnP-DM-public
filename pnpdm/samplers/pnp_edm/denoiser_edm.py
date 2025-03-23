@@ -133,6 +133,10 @@ class Denoiser_EDM:
         # save all x_next into a list and save it
         x_next_list = []
         x_next_list.append(x_next)
+
+        # for i in range(i_start, 0, -1):
+            # ddpm
+
         for i, (t_cur, t_next) in enumerate(zip(self.t_steps[:-1], self.t_steps[1:])): # 0, ..., N-1
             if i < i_start:
                 # Skip the steps before i_start.

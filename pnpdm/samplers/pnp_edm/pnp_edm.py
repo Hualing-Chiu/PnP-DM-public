@@ -5,6 +5,8 @@ from tqdm import tqdm
 from collections import defaultdict
 from .denoiser_edm import Denoiser_EDM
 
+import torchaudio
+
 class PnPEDM:
     def __init__(self, config, model, operator, noiser, device):
         self.config = config
@@ -16,7 +18,7 @@ class PnPEDM:
             self.edm = Denoiser_EDM(model, device, **config.common_kwargs, **config.vp_kwargs, mode='pfode')
         elif config.mode == 've':
             self.edm = Denoiser_EDM(model, device, **config.common_kwargs, **config.ve_kwargs, mode='pfode')
-        elif config.mode == 'iddpm':
+        elif config.mode == 'iddpm':    
             self.edm = Denoiser_EDM(model, device, **config.common_kwargs, **config.iddpm_kwargs, mode='pfode')
         elif config.mode == 'edm':
             self.edm = Denoiser_EDM(model, device, **config.common_kwargs, **config.edm_kwargs, mode='pfode')
@@ -68,15 +70,16 @@ class PnPEDM:
         )[1:]
         assert self.config.num_iters-1 in iters_count_as_sample, "num_iters-1 should be included in iters_count_as_sample"
         sub_pbar = tqdm(range(self.config.num_iters))
-        for i in sub_pbar:
+        for i in sub_pbar: 
             rho_iter = self.config.rho * (self.config.rho_decay_rate**i)
             rho_iter = max(rho_iter, self.config.rho_min)
 
             # likelihood step
+            # proximal_generator return 的是 m_x + noise
             z = self.operator.proximal_generator(x, y_n, self.noiser.sigma, rho_iter)
 
             # prior step
-            x = self.edm(z, rho_iter)
+            x = self.edm(z, rho_iter) # change
 
             if i in iters_count_as_sample:
                 samples.append(x)
@@ -138,3 +141,81 @@ class PnPEDMBatch(PnPEDM):
             x = self.edm(z, rho_iter)
 
         return x
+
+class PnPDDPMSourceSeparation(PnPEDM):
+    def __init__(self, config, model, operator, noiser, device):
+        super().__init__(config, model, operator, noiser, device)
+
+    def prepara_data(self, audio_files: List[str]):
+        filtered_audio_files = [[file for file in files if file.endswith('wav')] for files in audio_files]
+        n_samples = min([len(files) for files in filtered_audio_files])
+
+        return {f"spk{i}": random.sample(files, k=n_samples)  for i, files in enumerate(filtered_mic2_audio_files)}
+
+    def prepare_audio_before_degradation(self, x: List[torch.tensor]) -> torch.Tensor:
+        min_sample_length = min(map(lambda tensor: tensor.size(-1), x))
+        truncated_x = list(map(lambda tensor: tensor[..., :min_sample_length], x))
+        return torch.cat(truncated_x, dim=0) # dim=-1 to dim=0
+
+    def save_audios(
+        self,
+        pred_sample: torch.Tensor,
+        degraded_sample: torch.Tensor,
+        original_sample: torch.Tensor,
+        idx: int,
+        n_spk: int,
+        sr: int = 16000,
+    ):
+        pred_chunked = torch.chunk(pred_sample, chunks=n_spk, dim=0)
+        orig_chunked = torch.chunk(original_sample, chunks=n_spk, dim=0)
+        for i, (cur_pred, cur_orig) in enumerate(zip(pred_chunked, orig_chunked)):
+            name = f"Sample_{idx}_{i + 1}.wav"
+            torchaudio.save(os.path.join(self.generated_path, name), cur_pred.view(1, -1), sr)
+            torchaudio.save(os.path.join(self.original_path, name), cur_orig.view(1, -1), sr)
+
+        name = f"Sample_{idx}.wav"
+        torchaudio.save(os.path.join(self.degraded_path, name), degraded_sample.view(1, -1), sr)
+
+    def degradation(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.stack([s for s in torch.chunk(x, 2, dim=0)]).sum(0)
+
+    def __call__(
+        self,
+        audio_files: List[str],
+        diffusion,
+        target_sample_rate: int = 16000,
+        segment_size: Optional[int] = None,
+        device: str = "cpu"
+    ):
+        files_dict = self.prepare_data(audio_files)
+        fake_samples = []
+        real_samples = []
+
+        sub_pbar = 
+        for i, f in enumerate(zip(*files_dict.values())):
+            x = self.load_audios(f, target_sample_rate, segment_size, device)
+            x = self.prepare_audio_before_degradation(x)
+
+            degraded_sample = self.degradation(x).cpu()
+
+            # sample = diffusion.p_sample_loop(
+            #     self.model,
+            #     x.shape,
+            #     clip_denoised=False,
+            #     model_kwargs={},
+            #     sample_method=self.task_type,
+            #     orig_x=x,
+            #     progress=True,
+            #     degradation=self.degradation,
+            # ).cpu()
+
+            x = x.cpu()
+            real_samples.append(x)
+            fake_samples.append(sample)
+
+            self.save_audios(sample, degraded_sample, x, i, len(audio_files), sr=target_sample_rate)
+            del sample, x, degraded_sample
+            torch.cuda.empty_cache()
+
+        scores = calculate_all_metrics(fake_samples, self.metrics, reference_wavs=real_samples)
+        log_results(results_dir=self.output_dir, res=scores)
