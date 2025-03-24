@@ -10,7 +10,7 @@ class SourceSeparation(LinearSVDOperator):
     def __init__(self, channels, ratio, device):
         self.channels = channels
         self.ratio = ratio
-        A = torch.Tensor([1 / ratio] * ratio).to(device)
+        A = torch.Tensor([[1 / ratio**2] * ratio**2]).to(device)
         self.U_small, self.singulars_small, self.V_small = torch.svd(A, some=False)
         self.Vt_small = self.V_small.transpose(0, 1) # transpose matrix
 

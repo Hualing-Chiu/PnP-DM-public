@@ -43,6 +43,7 @@ class PnPDDPM:
                 orig_x=g_x,
                 progress=True,
                 degradation=self.degradation
+                rho=rho_iter
             ).cpu()
 
             if i in iters_count_as_sample:
