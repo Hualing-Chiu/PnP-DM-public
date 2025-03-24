@@ -32,7 +32,7 @@ class PnPDDPM:
             rho_iter = max(rho_iter, self.config.rho_min)
 
             # likelihood step
-            z = self.operator.proximal_generator(x, y_n, self.noiser.sigma, rho_iter) # not finish yet
+            z = self.operator.proximal_generator(x, y_n, self.noiser.sigma, rho_iter)
 
             # prior step
             x = self.diffusion.p_sample_loop(

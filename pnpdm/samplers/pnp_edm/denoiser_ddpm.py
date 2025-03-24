@@ -5,9 +5,9 @@ import numpy as np
 import torch
 import torch as th
 
-from .losses import discretized_gaussian_log_likelihood, normal_kl
-from .nn import mean_flat
-from .tasks import TaskType
+# from .losses import discretized_gaussian_log_likelihood, normal_kl
+# from .nn import mean_flat
+# from .tasks import TaskType
 
 
 def get_named_beta_schedule(schedule_name, num_diffusion_timesteps):
@@ -581,7 +581,7 @@ class GaussianDiffusion:
                     clip_denoised=clip_denoised,
                     denoised_fn=denoised_fn,
                     model_kwargs=model_kwargs,
-                    degradation=degradation
+                    degradation=degradation,
                     orig_x=orig_x,
                 )
 
