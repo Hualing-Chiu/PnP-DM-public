@@ -42,7 +42,7 @@ class PnPDDPM:
                 model_kwargs={},
                 orig_x=g_x,
                 progress=True,
-                degradation=self.degradation
+                degradation=self.degradation,
                 rho=rho_iter
             ).cpu()
 

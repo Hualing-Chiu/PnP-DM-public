@@ -1,4 +1,5 @@
 import torch, os, hydra, logging
+import random
 import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
@@ -6,7 +7,7 @@ from typing import List, Optional, Dict, Tuple
 from collections import defaultdict
 from torchvision import transforms
 from pnpdm.data import get_dataset, get_dataloader
-from pnpdm.tasks import get_operator, get_noise, get_metrics, MotionBlurCircular
+from pnpdm.tasks import get_operator, get_noise, MotionBlurCircular
 from pnpdm.models import get_model
 from pnpdm.samplers import get_sampler
 from hydra.core.hydra_config import HydraConfig
@@ -29,8 +30,11 @@ def posterior_sample(cfg):
     # prepare task (forward model and noise)
     operator = get_operator(**task_config.operator, device=device)
     noiser = get_noise(**task_config.noise)
-    metrics = get_metrics(**task_config.metrics)
-    print(f"metrics: {metrics}")
+    metrics_list = [
+        hydra.utils.instantiate(task_config.metrics[metric], device=device)
+        for metric in task_config.metrics
+    ]
+    # print([type(m) for m in metrics_list])
 
     # prepare dataloader
     # transform = transforms.Compose([
@@ -99,7 +103,7 @@ def posterior_sample(cfg):
         torch.cuda.empty_cache()
 
     scores = calculate_all_metrics(
-        generated_samples, List[Metric], reference_wavs=real_samples
+        generated_samples, metrics_list, reference_wavs=real_samples
     )
     log_results(results_dir=output_dir, res=scores)
 
