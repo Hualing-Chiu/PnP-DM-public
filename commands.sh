@@ -57,5 +57,5 @@ python posterior_sample.py +data=blackhole_real +task=blackhole_imaging_realM87 
        sampler.num_iters=200 sampler.rho=10 sampler.rho_decay_rate=0.93 sampler.rho_min=0.02 sampler.batch_size=100 gpu=0 add_exp_name=final-realM87-10-0.02-0.93-200-1e-5-200
 
 # Source Separation
-python posterior_sample.py +data=vctk +task=source_separation +model=diffwave +sampler=pnp_ddpm \
+python posterior_sample.py +data=vctk +task=source_separation +model=diffwave +diffusion=gaussian_diffusion +sampler=pnp_ddpm \
        sampler.rho=10 sampler.rho_decay_rate=0.9 sampler.rho_min=1.0

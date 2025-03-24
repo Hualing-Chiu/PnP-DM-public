@@ -13,7 +13,7 @@ from pnpdm.samplers import get_sampler
 from hydra.core.hydra_config import HydraConfig
 from monai.metrics import PSNRMetric, SSIMMetric
 from taming.modules.losses.lpips import LPIPS
-from pnpdm.improved_diffusion.inference_utils import calculate_all_metrics, log_results
+from pnpdm.improved_diffusion.inference_utils import calculate_all_metrics, log_results, remove_prefix_from_state_dict
 from pnpdm.improved_diffusion.metrics import Metric
 
 @hydra.main(version_base="1.2", config_path="configs", config_name="default")
@@ -54,9 +54,16 @@ def posterior_sample(cfg):
     if task_config.operator.name == "source_separation":
         audio_files = [list(map(lambda x: os.path.join(d, x), os.listdir(d))) for d in data_config.root] # List[str]
 
-    files_dict = prepara_data(audio_files)
+    files_dict = prepara_data(audio_files) 
+
+    model = get_model(model_config.name, **model_config.model)
+    # load checkpoint
+    pl_ckpt = torch.load(model_config.model_path, map_location="cpu")
+    model_state = remove_prefix_from_state_dict(
+        pl_ckpt["state_dict"], j=1
+    )
     # load model
-    model = get_model(**model_config)
+    model.load_state_dict(model_state)
     model = model.to(device)
     model.eval()
 

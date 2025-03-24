@@ -1,4 +1,4 @@
-_target_: improved_diffusion.script_util.create_gaussian_diffusion
+_target_: pnpdm.improved_diffusion.script_util.create_gaussian_diffusion
 learn_sigma: false
 sigma_small: true
 steps: 200
