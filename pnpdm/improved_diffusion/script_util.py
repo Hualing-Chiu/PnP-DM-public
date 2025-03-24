@@ -2,6 +2,7 @@ import hydra.utils
 from hydra.core.hydra_config import HydraConfig
 
 from pnpdm.samplers.pnp_edm import denoiser_ddpm as gd
+from pnpdm.samplers.pnp_edm.denoiser_ddpm import GaussianDiffusion
 
 def create_gaussian_diffusion(
     *,
