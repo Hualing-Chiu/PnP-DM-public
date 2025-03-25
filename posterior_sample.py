@@ -1,4 +1,5 @@
 import torch, os, hydra, logging
+import torchaudio
 import random
 import numpy as np
 import matplotlib.pyplot as plt
@@ -35,21 +36,6 @@ def posterior_sample(cfg):
         for metric in task_config.metrics
     ]
     # print([type(m) for m in metrics_list])
-
-    # prepare dataloader
-    # transform = transforms.Compose([
-    #     transforms.Resize((256, 256)),
-    #     transforms.Normalize((0.5), (0.5))
-    # ])
-    # inv_transform = transforms.Compose([
-    #     transforms.Normalize((-1), (2)),
-    #     transforms.Lambda(lambda x: x.clamp(0, 1).detach())
-    # ])
-    
-    # dataset = get_dataset(**data_config, transform=transform)
-    # num_test_images = len(dataset)
-    # dataloader = get_dataloader(dataset, batch_size=1, num_workers=0, train=False)
-
     # source separation load data
     if task_config.operator.name == "source_separation":
         audio_files = [list(map(lambda x: os.path.join(d, x), os.listdir(d))) for d in data_config.root] # List[str]
@@ -90,16 +76,16 @@ def posterior_sample(cfg):
         x = load_audios(f, 16000, None, "cpu")
         x = prepare_audio_before_degradation(x)
         degraded_sample = degradation(x).cpu() # y_n
-
         # sampling
         for _ in tqdm(range(cfg.num_runs)):
+            print(x.shape)
             sample = sampler(
                 g_x=x,
                 y_n=degraded_sample,
                 record=cfg.record,
                 save_root=generated_path
             )
-
+            # print('==============')
         x = x.cpu()
         real_samples.append(x)
         generated_samples.append(sample)
@@ -145,10 +131,9 @@ def load_audio(
     return x
 
 def load_audios(paths: List[str], *args, **kwargs) -> List[torch.Tensor]:
-    return [self.load_audio(p, *args, **kwargs) for p in paths]
+    return [load_audio(p, *args, **kwargs) for p in paths]
 
 def save_audios(
-    self,
     pred_sample: torch.Tensor,
     degraded_sample: torch.Tensor,
     original_sample: torch.Tensor,
@@ -165,23 +150,23 @@ def save_audios(
     for i, (cur_pred, cur_orig) in enumerate(zip(pred_chunked, orig_chunked)):
         name = f"Sample_{idx}_{i + 1}.wav"
         torchaudio.save(
-            os.path.join(self.generated_path, name), cur_pred.view(1, -1), sr
+            os.path.join(generated_path, name), cur_pred.view(1, -1), sr
         )
         torchaudio.save(
-            os.path.join(self.original_path, name), cur_orig.view(1, -1), sr
+            os.path.join(original_path, name), cur_orig.view(1, -1), sr
         )
     
     # concate the separate audio
     concatenated_pred = torch.cat(pred_chunked, dim=-1)
     name = f"Sample_{idx}.wav"
     torchaudio.save(
-        os.path.join(self.concatenate_path, name), concatenated_pred.view(1, -1), sr
+        os.path.join(concatenate_path, name), concatenated_pred.view(1, -1), sr
     )
 
     # redefine name for degraded
     name = f"Sample_{idx}.wav"
     torchaudio.save(
-        os.path.join(self.degraded_path, name), degraded_sample.view(1, -1), sr
+        os.path.join(degraded_path, name), degraded_sample.view(1, -1), sr
     )
 
 def degradation(x: torch.Tensor) -> torch.Tensor:

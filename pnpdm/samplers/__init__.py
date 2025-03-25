@@ -14,6 +14,6 @@ from .pnp_edm.pnp_ddpm import PnPDDPM
 #     else:
 #         raise NameError(f"Model {config.name} is not defined.")
 
-def get_sampler(config, model, diffusion, operator, noiser, device):
+def get_sampler(config, model, diffusion, degradation, operator, noiser, device):
     if config.name == 'pnp_ddpm':
-        return PnPDDPM(config, model, diffusion, operator, noiser, device)
+        return PnPDDPM(config, model, diffusion, degradation, operator, noiser, device)

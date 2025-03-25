@@ -19,14 +19,14 @@ def create_gaussian_diffusion(
     timestep_respacing="",
 ):
     betas = gd.get_named_beta_schedule(noise_schedule, steps)
-    # if use_kl:
-    #     loss_type = gd.LossType.RESCALED_KL
-    # elif rescale_learned_sigmas:
-    #     loss_type = gd.LossType.RESCALED_MSE
-    # elif use_l1:
-    #     loss_type = gd.LossType.L1
-    # else:
-    #     loss_type = gd.LossType.MSE
+    if use_kl:
+        loss_type = gd.LossType.RESCALED_KL
+    elif rescale_learned_sigmas:
+        loss_type = gd.LossType.RESCALED_MSE
+    elif use_l1:
+        loss_type = gd.LossType.L1
+    else:
+        loss_type = gd.LossType.MSE
     if not timestep_respacing:
         timestep_respacing = [steps]
     return GaussianDiffusion(
@@ -43,7 +43,7 @@ def create_gaussian_diffusion(
             if not learn_sigma
             else gd.ModelVarType.LEARNED_RANGE
         ),
-        # loss_type=loss_type,
+        loss_type=loss_type,
         input_sigma_t=input_sigma_t,
         rescale_timesteps=rescale_timesteps,
     )
