@@ -313,6 +313,7 @@ class GaussianDiffusion:
             if self.model_mean_type == ModelMeanType.START_X:
                 pred_xstart = process_xstart(model_output)
             else: # in
+                print("in")
                 pred_xstart = process_xstart(
                     self._predict_xstart_from_eps(x_t=x, t=t, eps=model_output)
                 )
@@ -430,6 +431,7 @@ class GaussianDiffusion:
         measurement_cond_fn=None,
         # sample_method=None,
         orig_x=None,
+        z=None,
         degradation=None,
         # use_rg_bwe: bool = True,
         rho = None
@@ -472,6 +474,7 @@ class GaussianDiffusion:
             measurement=measurement,
             measurement_cond_fn=measurement_cond_fn,
             # sample_method=sample_method,
+            z=z,
             orig_x=orig_x,
             degradation=degradation,
             # use_rg_bwe=use_rg_bwe,
@@ -495,6 +498,7 @@ class GaussianDiffusion:
         range_t=0,
         cond_fn=None,
         orig_x=None,
+        z=None,
         # sample_method=None,
         degradation=None,
         measurement=None,
@@ -513,7 +517,7 @@ class GaussianDiffusion:
             device = next(model.parameters()).device
         assert isinstance(shape, (tuple, list))
         if noise is not None:
-            img = noise
+            img = z # img = noise
         else:
             img = th.randn(*shape, device=device)
         

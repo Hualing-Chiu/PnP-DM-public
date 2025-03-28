@@ -61,7 +61,7 @@ def posterior_sample(cfg):
     # inference
     output_dir = os.path.join("results", task_config.operator.name)
     generated_path = os.path.join(output_dir, "generated")
-    original_path = os.path.join(output_dir, "results")
+    original_path = os.path.join(output_dir, "original")
     degraded_path = os.path.join(output_dir, "degraded")
     for path in [generated_path, original_path, degraded_path]:
         if not exists(path):
@@ -78,7 +78,7 @@ def posterior_sample(cfg):
         degraded_sample = degradation(x).cpu() # y_n
         # sampling
         for _ in tqdm(range(cfg.num_runs)):
-            print(x.shape)
+            # print(x.shape)
             sample = sampler(
                 g_x=x,
                 y_n=degraded_sample,
