@@ -144,17 +144,21 @@ def save_audios(
     n_spk: int,
     sr: int = 16000,
 ):
+    print(pred_sample.shape)
     pred_chunked = torch.chunk(
         pred_sample, chunks=n_spk, dim=0 # dim=0 -> batch # modify
     )  # explicit number of chunks 2
     orig_chunked = torch.chunk(
         original_sample, chunks=n_spk, dim=0
     )  # explicit number of chunks 2
+    # print(len(orig_chunked))
+    # print(len(pred_chunked))
     for i, (cur_pred, cur_orig) in enumerate(zip(pred_chunked, orig_chunked)):
         name = f"Sample_{idx}_{i + 1}.wav"
         torchaudio.save(
             os.path.join(generated_path, name), cur_pred.view(1, -1), sr
         )
+        print(os.path.join(generated_path, name))
         torchaudio.save(
             os.path.join(original_path, name), cur_orig.view(1, -1), sr
         )

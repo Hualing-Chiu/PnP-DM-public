@@ -15,14 +15,18 @@ class SourceSeparation(NonLinearOperator):
         return x.sum(dim=0, keepdim=True)
 
     def proximal_generator(self, x, y, sigma, rho, gamma=1e-4, num_iters=100):
-        z = x
-        z.requires_grad_()
+        z = x.clone().detach()
+        z.requires_grad_(True)
+        
         for _ in range(num_iters):
             data_fit = (self.forward(z) - y).norm()**2 / (2* sigma**2)
             grad = torch.autograd.grad(outputs=data_fit, inputs=z)[0]
             z = z - gamma * grad - (gamma / rho**2) * (z - x) + np.sqrt(2 * gamma) * torch.randn_like(x)
 
         return z
+
+    # def initialize(self, gt, y):
+    #     torch.randn_like(gt)
 
     # def __init__(self, channels, ratio, device):
     #     self.channels = channels

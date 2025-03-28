@@ -257,7 +257,7 @@ class GaussianDiffusion:
             model_kwargs = {}
 
         B, C = x.shape[:2]
-        assert t.shape == (B,)
+        assert t.shape == (B,), "error t.shape"
 
         if self.input_sigma_t:
             model_output = model(
@@ -430,7 +430,7 @@ class GaussianDiffusion:
         measurement_cond_fn=None,
         # sample_method=None,
         orig_x=None,
-        z=None,
+        # z=None,
         degradation=None,
         # use_rg_bwe: bool = True,
         rho = None
@@ -473,7 +473,7 @@ class GaussianDiffusion:
             measurement=measurement,
             measurement_cond_fn=measurement_cond_fn,
             # sample_method=sample_method,
-            z=z,
+            # z=z,
             orig_x=orig_x,
             degradation=degradation,
             # use_rg_bwe=use_rg_bwe,
@@ -497,7 +497,7 @@ class GaussianDiffusion:
         range_t=0,
         cond_fn=None,
         orig_x=None,
-        z=None,
+        # z=None,
         # sample_method=None,
         degradation=None,
         measurement=None,
@@ -516,13 +516,13 @@ class GaussianDiffusion:
             device = next(model.parameters()).device
         assert isinstance(shape, (tuple, list))
         if noise is not None:
-            img = z # img = noise
+            img = noise.to(device)
         else:
             img = th.randn(*shape, device=device)
         
         # self.num_timesteps = self.sqrt_one_minus_alphas_cumprod
         indices = list(range(self.num_timesteps))[::-1] # reverse
-        img.requires_grad_(False)
+        # img.requires_grad_(False)
 
         if progress:
             # Lazy import so that we don't depend on tqdm.
@@ -566,7 +566,6 @@ class GaussianDiffusion:
                 continue
                
             t = th.tensor([i] * shape[0], device=device)
-
             # if sample_method in rg_exps:
             #     assert corrector and degradation
             #     img.requires_grad_(True)
@@ -575,7 +574,6 @@ class GaussianDiffusion:
             #         img = corrector.update_fn_adaptive(
             #             None, img, t, y, threshold=200, steps=1, source_separation=False
             #         )
-
             with th.no_grad():
                 out = self.p_sample(
                     model,
@@ -587,7 +585,6 @@ class GaussianDiffusion:
                     degradation=degradation,
                     orig_x=orig_x,
                 )
-
             # if sample_method == TaskType.SOURCE_SEPARATION:
             #     assert corrector and degradation
             #     y = degradation(orig_x)

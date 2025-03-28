@@ -17,6 +17,9 @@ class PnPDDPM:
 
     def __call__(self, g_x, y_n, record=False, save_root=None):
         samples = []
+        # initialize
+        x = torch.randn_like(g_x).to(g_x.device)
+        # x = self.operator.initialize(g_x, y_n)
 
         iters_count_as_sample = np.linspace(
             self.config.num_burn_in_iters,
@@ -31,25 +34,23 @@ class PnPDDPM:
             rho_iter = self.config.rho * (self.config.rho_decay_rate ** i)
             rho_iter = max(rho_iter, self.config.rho_min)
 
-            # initialize
-            x = torch.randn_like(g_x).to(g_x.device)
-            # print(x.shape)
             # likelihood step
-            # print(y_n.shape)
             z = self.operator.proximal_generator(x, y_n, self.noiser.sigma, rho_iter)
-            # print("=============")
+            # print(f"z.shape: {z.shape}")
             # prior step
             x = self.diffusion.p_sample_loop(
                 self.model,
-                y_n.shape,
+                z.shape,
+                noise=z,
                 clip_denoised=False,
                 model_kwargs={},
                 orig_x=g_x,
                 progress=True,
                 degradation=None,
-                z=z,
+                # z=z,
                 rho=rho_iter
             ).cpu()
+            # print(f"x.shape: {x.shape}")
 
             if i in iters_count_as_sample:
                 samples.append(x)
