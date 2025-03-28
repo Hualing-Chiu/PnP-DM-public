@@ -68,7 +68,7 @@ def posterior_sample(cfg):
             os.makedirs(path)
 
     # inference
-    fake_samples = []
+    generated_samples = []
     real_samples = []
     files_key = list(files_dict.keys())
 
@@ -77,7 +77,7 @@ def posterior_sample(cfg):
         x = prepare_audio_before_degradation(x)
         degraded_sample = degradation(x).cpu() # y_n
         # sampling
-        for _ in tqdm(range(cfg.num_runs)):
+        for _ in tqdm(range(cfg.num_runs)): # num_runs = 1
             # print(x.shape)
             sample = sampler(
                 g_x=x,
@@ -89,9 +89,9 @@ def posterior_sample(cfg):
         x = x.cpu()
         real_samples.append(x)
         generated_samples.append(sample)
-
-        save_audios(sample, degraded_sample, x, i, len(audio_files), sr=16000)
-
+        # print('==============')
+        save_audios(original_path, generated_path, degraded_path, sample, degraded_sample, x, i, len(audio_files), sr=16000)
+        # print('==============')
         del sample, x, degraded_sample
         torch.cuda.empty_cache()
 
@@ -134,6 +134,9 @@ def load_audios(paths: List[str], *args, **kwargs) -> List[torch.Tensor]:
     return [load_audio(p, *args, **kwargs) for p in paths]
 
 def save_audios(
+    original_path: str,
+    generated_path: str,
+    degraded_path: str,
     pred_sample: torch.Tensor,
     degraded_sample: torch.Tensor,
     original_sample: torch.Tensor,
@@ -157,11 +160,11 @@ def save_audios(
         )
     
     # concate the separate audio
-    concatenated_pred = torch.cat(pred_chunked, dim=-1)
-    name = f"Sample_{idx}.wav"
-    torchaudio.save(
-        os.path.join(concatenate_path, name), concatenated_pred.view(1, -1), sr
-    )
+    # concatenated_pred = torch.cat(pred_chunked, dim=-1)
+    # name = f"Sample_{idx}.wav"
+    # torchaudio.save(
+    #     os.path.join(concatenate_path, name), concatenated_pred.view(1, -1), sr
+    # )
 
     # redefine name for degraded
     name = f"Sample_{idx}.wav"

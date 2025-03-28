@@ -54,4 +54,5 @@ class PnPDDPM:
             if i in iters_count_as_sample:
                 samples.append(x)
 
+        # return torch.concat(samples, dim=0)
         return samples[-1]
