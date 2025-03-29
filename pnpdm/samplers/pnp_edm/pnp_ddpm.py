@@ -37,7 +37,7 @@ class PnPDDPM:
             # likelihood step
             # (1 - i / N) * T
             # t = (1 - i / self.config.num_iters) * self.diffusion.betas
-            t = torch.tensor([int((1 - i / self.config.num_iters) * (len(self.diffusion.betas) - 1))] * x.shape[0]) # one-dim
+            t = int((1 - i / self.config.num_iters) * (len(self.diffusion.betas) - 1)) # one-dim
             # print(t)
             z = self.operator.proximal_generator(x, y_n, self.diffusion, t, self.noiser.sigma, rho_iter)
             # print(f"z.shape: {z.shape}")
@@ -52,7 +52,7 @@ class PnPDDPM:
                 progress=True,
                 degradation=None,
                 # z=z,
-                t=t,
+                start=t,
                 rho=rho_iter
             ).cpu()
             print(torch.max(x))
