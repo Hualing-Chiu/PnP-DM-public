@@ -37,15 +37,15 @@ class PnPDDPM:
             # likelihood step
             # (1 - i / N) * T
             # t = (1 - i / self.config.num_iters) * self.diffusion.betas
-            t = torch.from_numpy((1 - i / self.config.num_iters) * self.diffusion.betas) # one-dim
-            print(t)
+            t = int((1 - i / self.config.num_iters) * len(self.diffusion.betas)) # one-dim
+            # print(t)
             z = self.operator.proximal_generator(x, y_n, self.diffusion, t, self.noiser.sigma, rho_iter)
             # print(f"z.shape: {z.shape}")
             # prior step
             x = self.diffusion.p_sample_loop(
                 self.model,
-                x.shape,
-                noise=None,
+                z.shape,
+                noise=z,
                 clip_denoised=False,
                 model_kwargs={},
                 orig_x=g_x,
