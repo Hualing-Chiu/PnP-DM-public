@@ -3,7 +3,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 from collections import defaultdict
-from einops import repeat
 # from .denoiser_ddpm import GaussianDiffusion
 
 class PnPDDPM:
@@ -36,7 +35,11 @@ class PnPDDPM:
             rho_iter = max(rho_iter, self.config.rho_min)
 
             # likelihood step
-            z = self.operator.proximal_generator(x, y_n, self.diffusion, i, self.noiser.sigma, rho_iter)
+            # (1 - i / N) * T
+            # t = (1 - i / self.config.num_iters) * self.diffusion.betas
+            t = torch.from_numpy((1 - i / self.config.num_iters) * self.diffusion.betas) # one-dim
+            print(t)
+            z = self.operator.proximal_generator(x, y_n, self.diffusion, t, self.noiser.sigma, rho_iter)
             # print(f"z.shape: {z.shape}")
             # prior step
             x = self.diffusion.p_sample_loop(

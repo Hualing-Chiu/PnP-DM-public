@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+from einops import repeat
 from . import register_operator, LinearOperator, LinearSVDOperator, NonLinearOperator
 
 @register_operator(name='source_separation')
@@ -23,6 +24,7 @@ class SourceSeparation(NonLinearOperator):
         log_p_y_x = repeat(log_p_y_x, "h ... -> (r h) ...", r=n_spk)
         z = z + log_p_y_x / n_spk
         z = diffusion.q_sample(z, t)
+        
         # z.requires_grad_(True)
         
         # for _ in range(num_iters):
