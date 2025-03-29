@@ -433,6 +433,7 @@ class GaussianDiffusion:
         # z=None,
         degradation=None,
         # use_rg_bwe: bool = True,
+        t=None,
         rho = None
     ):
         """
@@ -477,6 +478,7 @@ class GaussianDiffusion:
             orig_x=orig_x,
             degradation=degradation,
             # use_rg_bwe=use_rg_bwe,
+            t=t,
             rho = rho
         ):
             final = sample
@@ -503,6 +505,7 @@ class GaussianDiffusion:
         measurement=None,
         measurement_cond_fn=None,
         # use_rg_bwe: bool = True,
+        t=None,
         rho = None
     ):
         """
@@ -562,10 +565,13 @@ class GaussianDiffusion:
         #     rg_exps.add(TaskType.BWE)
 
         for i in indices:
-            if self.sqrt_one_minus_alphas_cumprod[i] > rho * self.sqrt_alphas_cumprod[i]: 
-                continue
+            # if self.sqrt_one_minus_alphas_cumprod[i] > rho * self.sqrt_alphas_cumprod[i]: 
+            #     continue
                
-            t = th.tensor([i] * shape[0], device=device)
+            # t = th.tensor([i] * shape[0], device=device)
+            # print(t.shape)
+            t = t.to(device)
+            # print(t)
             # if sample_method in rg_exps:
             #     assert corrector and degradation
             #     img.requires_grad_(True)

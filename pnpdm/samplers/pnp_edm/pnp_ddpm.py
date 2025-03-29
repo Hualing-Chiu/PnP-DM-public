@@ -37,14 +37,14 @@ class PnPDDPM:
             # likelihood step
             # (1 - i / N) * T
             # t = (1 - i / self.config.num_iters) * self.diffusion.betas
-            t = int((1 - i / self.config.num_iters) * len(self.diffusion.betas)) # one-dim
+            t = torch.tensor([int((1 - i / self.config.num_iters) * (len(self.diffusion.betas) - 1))] * x.shape[0]) # one-dim
             # print(t)
             z = self.operator.proximal_generator(x, y_n, self.diffusion, t, self.noiser.sigma, rho_iter)
             # print(f"z.shape: {z.shape}")
             # prior step
             x = self.diffusion.p_sample_loop(
                 self.model,
-                z.shape,
+                x.shape,
                 noise=z,
                 clip_denoised=False,
                 model_kwargs={},
@@ -52,10 +52,12 @@ class PnPDDPM:
                 progress=True,
                 degradation=None,
                 # z=z,
+                t=t,
                 rho=rho_iter
             ).cpu()
+            print(torch.max(x))
             # print(f"x.shape: {x.shape}")
-
+            # print(i, sum(x) == 0)
             if i in iters_count_as_sample:
                 samples.append(x)
 
