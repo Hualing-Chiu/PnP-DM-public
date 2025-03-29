@@ -1,5 +1,5 @@
 name: pnp_ddpm
-num_iters: 50
+num_iters: 5
 num_burn_in_iters: 40
 rho: 0.1
 rho_decay_rate: 1.0

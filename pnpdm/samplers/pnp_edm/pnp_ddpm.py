@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 from collections import defaultdict
+from einops import repeat
 # from .denoiser_ddpm import GaussianDiffusion
 
 class PnPDDPM:
@@ -35,13 +36,13 @@ class PnPDDPM:
             rho_iter = max(rho_iter, self.config.rho_min)
 
             # likelihood step
-            z = self.operator.proximal_generator(x, y_n, self.noiser.sigma, rho_iter)
+            z = self.operator.proximal_generator(x, y_n, self.diffusion, i, self.noiser.sigma, rho_iter)
             # print(f"z.shape: {z.shape}")
             # prior step
             x = self.diffusion.p_sample_loop(
                 self.model,
-                z.shape,
-                noise=z,
+                x.shape,
+                noise=None,
                 clip_denoised=False,
                 model_kwargs={},
                 orig_x=g_x,
