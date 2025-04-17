@@ -336,7 +336,7 @@ class GaussianDiffusion:
             "pred_xstart": pred_xstart,
         }
 
-    def _predict_xstart_from_eps(self, x_t, t, eps):
+    def _predict_xstart_from_eps(self, x_t, t, eps): # eps -> xstart
         assert x_t.shape == eps.shape
         return (
             _extract_into_tensor(self.sqrt_recip_alphas_cumprod, t, x_t.shape) * x_t
@@ -482,6 +482,7 @@ class GaussianDiffusion:
             rho = rho
         ):
             final = sample
+            # break
 
         return final["sample"]
 
@@ -564,11 +565,12 @@ class GaussianDiffusion:
         # if use_rg_bwe:
         #     rg_exps.add(TaskType.BWE)
 
+        
         for i in indices:
             # if self.sqrt_one_minus_alphas_cumprod[i] > rho * self.sqrt_alphas_cumprod[i]: 
             #     continue
-            if start < i:
-                continue
+            # if start < i:
+            #     continue
             
             t = th.tensor([i] * shape[0], device=device)
             # print(t.shape)

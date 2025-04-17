@@ -17,7 +17,7 @@ class SourceSeparation(NonLinearOperator):
 
     def proximal_generator(self, x, y, diffusion, i, sigma, rho, gamma=1e-4, num_iters=100):
         z = x.clone().detach()
-        alpha = 0.5
+        # alpha = 0.5
         n_spk = z.shape[0]
         log_p_y_x = (y - (
             torch.stack(torch.chunk(z, n_spk, 0)).sum(0)

@@ -18,7 +18,9 @@ class PnPDDPM:
     def __call__(self, g_x, y_n, record=False, save_root=None):
         samples = []
         # initialize
-        x = torch.randn_like(g_x).to(g_x.device)
+        # x = torch.randn_like(g_x).to(g_x.device)
+        x = torch.cat([y_n.clone(), y_n.clone()], dim=0)
+        # print(x.shape)
         # x = self.operator.initialize(g_x, y_n)
 
         iters_count_as_sample = np.linspace(
@@ -34,18 +36,17 @@ class PnPDDPM:
             rho_iter = self.config.rho * (self.config.rho_decay_rate ** i)
             rho_iter = max(rho_iter, self.config.rho_min)
 
-            # likelihood step
             # (1 - i / N) * T
             # t = (1 - i / self.config.num_iters) * self.diffusion.betas
             t = int((1 - i / self.config.num_iters) * (len(self.diffusion.betas) - 1)) # one-dim
             # print(t)
-            z = self.operator.proximal_generator(x, y_n, self.diffusion, t, self.noiser.sigma, rho_iter)
-            # print(f"z.shape: {z.shape}")
-            # prior step
-            x = self.diffusion.p_sample_loop(
+            # z = self.operator.proximal_generator(x, y_n, self.diffusion, t, self.noiser.sigma, rho_iter)
+
+            # likelihood step
+            z = self.diffusion.p_sample_loop(
                 self.model,
                 x.shape,
-                noise=z,
+                noise=x,
                 clip_denoised=False,
                 model_kwargs={},
                 orig_x=g_x,
@@ -55,11 +56,14 @@ class PnPDDPM:
                 start=t,
                 rho=rho_iter
             ).cpu()
-            print(torch.max(x))
+            # prior step
+            x = self.operator.proximal_generator(z, y_n, self.diffusion, t, self.noiser.sigma, rho_iter)
+            # x = self.diffusion._predict_xstart_from_eps(z, t)
+            # print(torch.max(x))
             # print(f"x.shape: {x.shape}")
             # print(i, sum(x) == 0)
-            if i in iters_count_as_sample:
-                samples.append(x)
+            # if i in iters_count_as_sample:
+            samples.append(x)
 
         # return torch.concat(samples, dim=0)
         return samples[-1]

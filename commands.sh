@@ -58,4 +58,4 @@ python posterior_sample.py +data=blackhole_real +task=blackhole_imaging_realM87 
 
 # Source Separation
 python posterior_sample.py +data=vctk +task=source_separation +model=diffwave +diffusion=gaussian_diffusion +sampler=pnp_ddpm \
-       sampler.rho=10 sampler.rho_decay_rate=0.01 sampler.rho_min=9
+       sampler.rho=10 sampler.rho_decay_rate=0.01 sampler.rho_min=1
