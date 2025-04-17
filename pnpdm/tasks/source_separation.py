@@ -27,7 +27,8 @@ class SourceSeparation(NonLinearOperator):
         t = torch.tensor([i] * z.shape[0])
         # print(log_p_y_x.sum(dim=-1, keepdim=True))
         # print(t)
-        z = diffusion.q_sample(z, t)
+        if t[0] != 0:
+            z = diffusion.q_sample(z, t)
         # z = F.normalize(z)
         # z.requires_grad_(True)
         # print(torch.max(z))
