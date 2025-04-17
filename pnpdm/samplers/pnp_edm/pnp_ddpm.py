@@ -46,7 +46,7 @@ class PnPDDPM:
             z = self.diffusion.p_sample_loop(
                 self.model,
                 x.shape,
-                noise=x,
+                noise=torch.randn_like(g_x).to(g_x.device) if i == 0 else x,
                 clip_denoised=False,
                 model_kwargs={},
                 orig_x=g_x,
