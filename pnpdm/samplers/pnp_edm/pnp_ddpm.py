@@ -20,6 +20,7 @@ class PnPDDPM:
         # initialize
         # x = torch.randn_like(g_x).to(g_x.device)
         x = torch.cat([y_n.clone(), y_n.clone()], dim=0)
+        # T = len(self.diffusion.betas) - 1
         # print(x.shape)
         # x = self.operator.initialize(g_x, y_n)
 
@@ -30,19 +31,20 @@ class PnPDDPM:
             dtype=int
         )[1:]
 
+        # this line is for prior first then posterior
+        t = int((1) * (len(self.diffusion.betas) - 1))
+
         assert self.config.num_iters - 1 in iters_count_as_sample, "num_iters-1 should be included in iters_count_as_sample"
-        sub_pbar = tqdm(range(self.config.num_iters))
+        sub_pbar = tqdm(range(1, self.config.num_iters))
         for i in sub_pbar:
             rho_iter = self.config.rho * (self.config.rho_decay_rate ** i)
             rho_iter = max(rho_iter, self.config.rho_min)
 
             # (1 - i / N) * T
             # t = (1 - i / self.config.num_iters) * self.diffusion.betas
-            t = int((1 - i / self.config.num_iters) * (len(self.diffusion.betas) - 1)) # one-dim
-            # print(t)
             # z = self.operator.proximal_generator(x, y_n, self.diffusion, t, self.noiser.sigma, rho_iter)
-
-            # likelihood step
+             # one-dim            
+            # prior step
             z = self.diffusion.p_sample_loop(
                 self.model,
                 x.shape,
@@ -56,12 +58,14 @@ class PnPDDPM:
                 start=t,
                 rho=rho_iter
             ).cpu()
-            # prior step
+
+            t = int((1 - i / self.config.num_iters) * (len(self.diffusion.betas) - 1))
+
+            # likelihood step
             x = self.operator.proximal_generator(z, y_n, self.diffusion, t, self.noiser.sigma, rho_iter)
             # x = self.diffusion._predict_xstart_from_eps(z, t)
             # print(torch.max(x))
             # print(f"x.shape: {x.shape}")
-            # print(i, sum(x) == 0)
             # if i in iters_count_as_sample:
             samples.append(x)
 
