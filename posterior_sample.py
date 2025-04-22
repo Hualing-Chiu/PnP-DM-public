@@ -15,6 +15,7 @@ from hydra.core.hydra_config import HydraConfig
 from monai.metrics import PSNRMetric, SSIMMetric
 from taming.modules.losses.lpips import LPIPS
 from pnpdm.improved_diffusion.inference_utils import calculate_all_metrics, log_results, remove_prefix_from_state_dict
+from pnpdm.data.utils import cut_audio_segment
 from pnpdm.improved_diffusion.metrics import Metric
 
 @hydra.main(version_base="1.2", config_path="configs", config_name="default")
@@ -59,7 +60,7 @@ def posterior_sample(cfg):
     sampler = get_sampler(sampler_config, model=model, diffusion=diffusion, degradation=degradation, operator=operator, noiser=noiser, device=device)
 
     # inference
-    output_dir = os.path.join("results_prior_first_new", task_config.operator.name)
+    output_dir = os.path.join("results_test", task_config.operator.name)
     generated_path = os.path.join(output_dir, "generated")
     original_path = os.path.join(output_dir, "original")
     degraded_path = os.path.join(output_dir, "degraded")
@@ -85,13 +86,10 @@ def posterior_sample(cfg):
                 record=cfg.record,
                 save_root=generated_path
             )
-            # print('==============')
         x = x.cpu()
         real_samples.append(x)
         generated_samples.append(sample)
-        # print('==============')
         save_audios(original_path, generated_path, degraded_path, sample, degraded_sample, x, i, len(audio_files), sr=16000)
-        # print('==============')
         del sample, x, degraded_sample
         torch.cuda.empty_cache()
 

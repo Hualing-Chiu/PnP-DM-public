@@ -15,7 +15,7 @@ class SourceSeparation(NonLinearOperator):
         # x: (B, C, T) -> (1, C, T)
         return x.sum(dim=0, keepdim=True)
 
-    def proximal_generator(self, x, y, diffusion, i, sigma, rho, gamma=1e-4, num_iters=100):
+    def proximal_generator(self, x, y, diffusion, i, sigma, rho, gamma=1e-4):
         z = x.clone().detach()
         # alpha = 0.5
         n_spk = z.shape[0]
@@ -39,7 +39,7 @@ class SourceSeparation(NonLinearOperator):
         #     # z = z - gamma * grad - (gamma / rho**2) * (z - x) + np.sqrt(2 * gamma) * torch.randn_like(x)
         #     z = z - gamma * grad + np.sqrt(2 * gamma) * torch.randn_like(x)
 
-        return z
+        return z.float()
 
     # def initialize(self, gt, y):
     #     torch.randn_like(gt)

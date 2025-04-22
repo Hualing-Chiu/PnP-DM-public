@@ -2,6 +2,7 @@ import hydra.utils
 from hydra.core.hydra_config import HydraConfig
 
 from pnpdm.samplers.pnp_edm import denoiser_ddpm as gd
+from .respace import SpacedDiffusion, space_timesteps
 from pnpdm.samplers.pnp_edm.denoiser_ddpm import GaussianDiffusion
 
 def create_gaussian_diffusion(
@@ -29,7 +30,26 @@ def create_gaussian_diffusion(
         loss_type = gd.LossType.MSE
     if not timestep_respacing:
         timestep_respacing = [steps]
-    return GaussianDiffusion(
+    # return GaussianDiffusion(
+    #     betas=betas,
+    #     model_mean_type=(
+    #         gd.ModelMeanType.EPSILON if not predict_xstart else gd.ModelMeanType.START_X
+    #     ),
+    #     model_var_type=(
+    #         (
+    #             gd.ModelVarType.FIXED_LARGE
+    #             if not sigma_small
+    #             else gd.ModelVarType.FIXED_SMALL
+    #         )
+    #         if not learn_sigma
+    #         else gd.ModelVarType.LEARNED_RANGE
+    #     ),
+    #     loss_type=loss_type,
+    #     input_sigma_t=input_sigma_t,
+    #     rescale_timesteps=rescale_timesteps,
+    # )
+    return SpacedDiffusion(
+        use_timesteps=space_timesteps(steps, timestep_respacing),
         betas=betas,
         model_mean_type=(
             gd.ModelMeanType.EPSILON if not predict_xstart else gd.ModelMeanType.START_X

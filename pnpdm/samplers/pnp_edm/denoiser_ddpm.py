@@ -434,7 +434,7 @@ class GaussianDiffusion:
         degradation=None,
         # use_rg_bwe: bool = True,
         start=None,
-        rho = None
+        # rho = None
     ):
         """
         Generate samples from the model.
@@ -479,12 +479,12 @@ class GaussianDiffusion:
             degradation=degradation,
             # use_rg_bwe=use_rg_bwe,
             start=start,
-            rho = rho
+            # rho = rho
         ):
             final = sample
-            # break
+            break
 
-        return final["sample"]
+        return final["pred_xstart"]
 
     def p_sample_loop_progressive(
         self,
@@ -507,7 +507,7 @@ class GaussianDiffusion:
         measurement_cond_fn=None,
         # use_rg_bwe: bool = True,
         start=None,
-        rho = None
+        # rho = None
     ):
         """
         Generate samples from the model and yield intermediate samples from
@@ -566,11 +566,12 @@ class GaussianDiffusion:
         #     rg_exps.add(TaskType.BWE)
 
         
+        # for i in indices:
         for i in indices:
             # if self.sqrt_one_minus_alphas_cumprod[i] > rho * self.sqrt_alphas_cumprod[i]: 
             #     continue
-            # if start < i:
-            #     continue
+            if start < i:
+                continue
             
             t = th.tensor([i] * shape[0], device=device)
             # print(t.shape)
