@@ -1,0 +1,16 @@
+name: unet_libritts
+
+model:
+  # _target_: improved_diffusion.unet_libritts.UNetModel
+  image_size: 16000
+  in_channels: 1
+  model_channels: 32
+  out_channels: 1
+  num_res_blocks: 3
+  attention_resolutions: [32, 64, 128, 256]
+  channel_mult: [1, 2, 2, 4, 4, 8, 8, 16, 16]
+  dims: 1
+  use_checkpoint: True
+  num_head_channels: 32
+
+model_path: weights/ema_0.9999_720000.pt

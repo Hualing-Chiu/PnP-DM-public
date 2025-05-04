@@ -1,0 +1,5 @@
+name: libritts
+
+root:
+  - /media/md01/public_datasets/LibriTTS_R/test-clean/1188/133604/
+  - /media/md01/public_datasets/LibriTTS_R/test-clean/4970/29093/

@@ -46,11 +46,11 @@ def posterior_sample(cfg):
     model = get_model(model_config.name, **model_config.model)
     # load checkpoint
     pl_ckpt = torch.load(model_config.model_path, map_location="cpu")
-    model_state = remove_prefix_from_state_dict(
-        pl_ckpt["state_dict"], j=1
-    )
+    # model_state = remove_prefix_from_state_dict(
+    #     pl_ckpt["state_dict"], j=1
+    # )
     # load model
-    model.load_state_dict(model_state)
+    model.load_state_dict(pl_ckpt, strict=False)
     model = model.to(device)
     model.eval()
 
@@ -60,14 +60,14 @@ def posterior_sample(cfg):
     sampler = get_sampler(sampler_config, model=model, diffusion=diffusion, degradation=degradation, operator=operator, noiser=noiser, device=device)
 
     # inference
-    output_dir = os.path.join("results_test", task_config.operator.name)
+    output_dir = os.path.join("results_libritts_test_z_minus_x", task_config.operator.name)
     generated_path = os.path.join(output_dir, "generated")
     original_path = os.path.join(output_dir, "original")
     degraded_path = os.path.join(output_dir, "degraded")
     for path in [generated_path, original_path, degraded_path]:
         if not exists(path):
             os.makedirs(path)
-
+ 
     # inference
     generated_samples = []
     real_samples = []
@@ -102,11 +102,11 @@ def exists(path: str):
         return os.path.exists(path)
 
 def prepara_data(audio_files: List[str]):
-    filtered_mic2_audio_files = [[file for file in files if "mic1" in file] for files in audio_files]
-    # filtered_audio_files = [[file for file in files if file.endswith('wav')] for files in audio_files]
-    n_samples = min([len(files) for files in filtered_mic2_audio_files])
+    # filtered_mic2_audio_files = [[file for file in files if "mic1" in file] for files in audio_files]
+    filtered_audio_files = [[file for file in files if file.endswith('wav')] for files in audio_files]
+    n_samples = min([len(files) for files in filtered_audio_files])
 
-    return {f"spk{i}": random.sample(files, k=n_samples)  for i, files in enumerate(filtered_mic2_audio_files)}
+    return {f"spk{i}": random.sample(files, k=n_samples)  for i, files in enumerate(filtered_audio_files)}
 
 def prepare_audio_before_degradation(x: List[torch.Tensor]) -> torch.Tensor:
     min_sample_length = min(map(lambda tensor: tensor.size(-1), x))
