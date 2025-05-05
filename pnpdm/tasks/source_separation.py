@@ -25,7 +25,8 @@ class SourceSeparation(NonLinearOperator):
             alpha = torch.ones(n_spk)
         else:
             alpha = self.coefficient_cal(z, y)
-            alpha = torch.clamp(alpha, min=1e-3)
+            alpha = torch.clamp(alpha, min=1e-3, max=1.5)
+
         # alpha = self.coefficient_cal(z, y)
         print(f"alpha: {alpha}")
 

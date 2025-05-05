@@ -60,7 +60,7 @@ def posterior_sample(cfg):
     sampler = get_sampler(sampler_config, model=model, diffusion=diffusion, degradation=degradation, operator=operator, noiser=noiser, device=device)
 
     # inference
-    output_dir = os.path.join("results_libritts_720k_coefficient", task_config.operator.name)
+    output_dir = os.path.join("results_vctk_720k_coefficient", task_config.operator.name)
     generated_path = os.path.join(output_dir, "generated")
     original_path = os.path.join(output_dir, "original")
     degraded_path = os.path.join(output_dir, "degraded")
@@ -102,8 +102,8 @@ def exists(path: str):
         return os.path.exists(path)
 
 def prepara_data(audio_files: List[str]):
-    # filtered_audio_files = [[file for file in files if "mic1" in file] for files in audio_files]
-    filtered_audio_files = [[file for file in files if file.endswith('wav')] for files in audio_files]
+    filtered_audio_files = [[file for file in files if "mic1" in file] for files in audio_files]
+    # filtered_audio_files = [[file for file in files if file.endswith('wav')] for files in audio_files]
     n_samples = min([len(files) for files in filtered_audio_files])
 
     return {f"spk{i}": random.sample(files, k=n_samples)  for i, files in enumerate(filtered_audio_files)}
