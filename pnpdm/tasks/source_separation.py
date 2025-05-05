@@ -22,32 +22,26 @@ class SourceSeparation(NonLinearOperator):
         alpha = self.coefficient_cal(z, y)
         # print(f"alpha: {alpha}")
 
-        # alpha = alpha.view(n_spk, 1, 1)
-        # recon = torch.sum(alpha * z, dim=0, keepdim=True)  # (1, 1, T)
-        # log_p_y_x = y - recon # (1, 1, T)
-        log_p_y_x = (y - (
-            torch.stack(torch.chunk(z, n_spk, 0)).sum(0)
-        ))
+        alpha = alpha.view(n_spk, 1, 1)
+        recon = torch.sum(alpha * z, dim=0, keepdim=True)  # (1, 1, T)
+        log_p_y_x = y - recon # (1, 1, T)
+        # log_p_y_x = (y - (
+        #     torch.stack(torch.chunk(z, n_spk, 0)).sum(0)
+        # ))
         log_p_y_x = (repeat(log_p_y_x, "h ... -> (r h) ...", r=n_spk))
-        z = z + log_p_y_x / n_spk
-        # z = z + log_p_y_x / n_spk()
+        z = z + (log_p_y_x / n_spk) * alpha
         t = torch.tensor([i] * z.shape[0])
         # print(log_p_y_x.sum(dim=-1, keepdim=True))
         # print(t)
         if t[0] != 0:
             z = diffusion.q_sample(z, t)
             z = z - (gamma / rho**2) * (z - x)
-            
-        # print(f"z: {z.shape}")  
-        # z.requires_grad_(True)
-        # print(torch.max(z))
         
         # for _ in range(num_iters):
         #     data_fit = (self.forward(z) - y).norm()**2 / (2* sigma**2)
         #     grad = torch.autograd.grad(outputs=data_fit, inputs=z)[0]
         #     z = z - gamma * grad - (gamma / rho**2) * (z - x) + np.sqrt(2 * gamma) * torch.randn_like(x)
         #     z = z - gamma * grad + np.sqrt(2 * gamma) * torch.randn_like(x)
-
         return z.float()
 
     def coefficient_cal(self, x, y):

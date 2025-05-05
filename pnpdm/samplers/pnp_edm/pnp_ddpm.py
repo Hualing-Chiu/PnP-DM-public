@@ -52,7 +52,7 @@ class PnPDDPM:
                 x.shape,
                 # noise=torch.randn_like(g_x).to(g_x.device) if i == 0 else x,
                 noise=None if i == 1 else x,
-                clip_denoised=False,
+                clip_denoised=True,
                 model_kwargs={},
                 orig_x=g_x,
                 progress=True,

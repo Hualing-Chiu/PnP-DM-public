@@ -60,7 +60,7 @@ def posterior_sample(cfg):
     sampler = get_sampler(sampler_config, model=model, diffusion=diffusion, degradation=degradation, operator=operator, noiser=noiser, device=device)
 
     # inference
-    output_dir = os.path.join("results_libritts_test_z_minus_x", task_config.operator.name)
+    output_dir = os.path.join("results_libritts_clamp", task_config.operator.name)
     generated_path = os.path.join(output_dir, "generated")
     original_path = os.path.join(output_dir, "original")
     degraded_path = os.path.join(output_dir, "degraded")
