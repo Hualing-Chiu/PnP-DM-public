@@ -8,7 +8,8 @@ import torch as th
 # from .losses import discretized_gaussian_log_likelihood, normal_kl
 # from .nn import mean_flat
 # from .tasks import TaskType
-
+# from speechbrain.inference.speaker import EncoderClassifier
+# classifier = EncoderClassifier.from_hparams(source="speechbrain/spkrec-ecapa-voxceleb")
 
 def get_named_beta_schedule(schedule_name, num_diffusion_timesteps):
     """

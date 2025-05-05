@@ -5,6 +5,7 @@ import numpy as np
 from einops import repeat
 from . import register_operator, LinearOperator, LinearSVDOperator, NonLinearOperator
 
+
 @register_operator(name='source_separation')
 class SourceSeparation(NonLinearOperator):
     def __init__(self, channels, device):
@@ -17,10 +18,16 @@ class SourceSeparation(NonLinearOperator):
 
     def proximal_generator(self, x, y, diffusion, i, sigma, rho, gamma=1e-4):
         z = x.clone().detach()
-        # alpha = 0.5
         n_spk = z.shape[0]
-        alpha = self.coefficient_cal(z, y)
-        # print(f"alpha: {alpha}")
+        t = torch.tensor([i] * z.shape[0])
+        
+        if t[0] > 50:
+            alpha = torch.ones(n_spk)
+        else:
+            alpha = self.coefficient_cal(z, y)
+            alpha = torch.clamp(alpha, min=1e-3)
+        # alpha = self.coefficient_cal(z, y)
+        print(f"alpha: {alpha}")
 
         alpha = alpha.view(n_spk, 1, 1)
         recon = torch.sum(alpha * z, dim=0, keepdim=True)  # (1, 1, T)
@@ -29,32 +36,28 @@ class SourceSeparation(NonLinearOperator):
         #     torch.stack(torch.chunk(z, n_spk, 0)).sum(0)
         # ))
         log_p_y_x = (repeat(log_p_y_x, "h ... -> (r h) ...", r=n_spk))
-        z = z + (log_p_y_x / n_spk) * alpha
+        z = z + (log_p_y_x / n_spk) / alpha
         t = torch.tensor([i] * z.shape[0])
         # print(log_p_y_x.sum(dim=-1, keepdim=True))
         # print(t)
         if t[0] != 0:
             z = diffusion.q_sample(z, t)
             z = z - (gamma / rho**2) * (z - x)
-        
-        # for _ in range(num_iters):
-        #     data_fit = (self.forward(z) - y).norm()**2 / (2* sigma**2)
-        #     grad = torch.autograd.grad(outputs=data_fit, inputs=z)[0]
-        #     z = z - gamma * grad - (gamma / rho**2) * (z - x) + np.sqrt(2 * gamma) * torch.randn_like(x)
-        #     z = z - gamma * grad + np.sqrt(2 * gamma) * torch.randn_like(x)
+
         return z.float()
 
     def coefficient_cal(self, x, y):
         """
         用最小平方法計算混合語音中每個來源訊號的係數 alpha
         """
-        x_1, x_2 = x[0], x[1]
-        # print(f"x_1: {x_1.shape}, x_2: {x_2.shape}")
+        x_1, x_2 = x[0].unsqueeze(0), x[1].unsqueeze(0) # (1, 1, T)
+        print(f"x_1: {x_1.shape}, x_2: {x_2.shape}")
+        print(f"y: {y.shape}")
 
         M = torch.Tensor([[torch.mean(x_1**2), torch.mean(x_1*x_2)],
-             [torch.mean(x_1*x_2), torch.mean(x_2**2)]])
+                          [torch.mean(x_1*x_2), torch.mean(x_2**2)]])
         
-        N = torch.Tensor([torch.mean(x_1*y), torch.mean(x_2*y)])
+        N = torch.Tensor([[torch.mean(x_1*y)], [torch.mean(x_2*y)]])
 
         alpha = torch.linalg.solve(M, N).squeeze()
 
