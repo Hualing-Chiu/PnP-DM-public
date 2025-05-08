@@ -32,7 +32,7 @@ class SourceSeparation(NonLinearOperator):
         #     torch.stack(torch.chunk(z, n_spk, 0)).sum(0)
         # ))
         log_p_y_x = (repeat(log_p_y_x, "h ... -> (r h) ...", r=n_spk)) / n_spk
-        z = z + log_p_y_x / torch.sqrt(alpha)
+        z = z + log_p_y_x / alpha
         # print(log_p_y_x.sum(dim=-1, keepdim=True))
         # print(t)
         if t[0] != 0:
@@ -67,7 +67,7 @@ class SourceSeparation(NonLinearOperator):
         N = torch.Tensor([[torch.mean(x1_sq * y_sq)], [torch.mean(x2_sq * y_sq)]])
 
         alpha = torch.linalg.solve(M, N).squeeze()
-        return alpha
+        return torch.sqrt(alpha)
     # def initialize(self, gt, y):
     #     torch.randn_like(gt)
 
