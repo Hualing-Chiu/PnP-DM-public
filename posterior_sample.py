@@ -17,6 +17,8 @@ from taming.modules.losses.lpips import LPIPS
 from pnpdm.improved_diffusion.inference_utils import calculate_all_metrics, log_results, remove_prefix_from_state_dict
 from pnpdm.data.utils import cut_audio_segment
 from pnpdm.improved_diffusion.metrics import Metric
+# from speechbrain.inference.speaker import EncoderClassifier
+# classifier = EncoderClassifier.from_hparams(source="speechbrain/spkrec-ecapa-voxceleb")
 
 @hydra.main(version_base="1.2", config_path="configs", config_name="default")
 def posterior_sample(cfg):
@@ -77,6 +79,17 @@ def posterior_sample(cfg):
         x = load_audios(f, 16000, None, "cpu")
         x = prepare_audio_before_degradation(x)
         degraded_sample = degradation(x).cpu() # y_n
+        
+        # reference
+        # referance_1 = random.choice([file for file in files_dict[files_key[0]] if file not in f[0]])
+        # referance_2 = random.choice([file for file in files_dict[files_key[1]] if file not in f[1]])
+        # referance_f = (referance_1, referance_2)
+        # r_x = load_audios(referance_f, 16000, None, "cpu")
+        # r_x = prepare_audio_before_degradation(r_x)
+
+        # with torch.no_grad():
+        #     r_embedding = classifier.encode_batch(r_x.squeeze(1))
+
         # sampling
         for _ in tqdm(range(cfg.num_runs)): # num_runs = 1
             # print(x.shape)
@@ -84,7 +97,8 @@ def posterior_sample(cfg):
                 g_x=x,
                 y_n=degraded_sample,
                 record=cfg.record,
-                save_root=generated_path
+                save_root=generated_path,
+                task_kwargs= None # {'r_e': r_embedding}
             )
         x = x.cpu()
         real_samples.append(x)
@@ -142,7 +156,6 @@ def save_audios(
     n_spk: int,
     sr: int = 16000,
 ):
-    print(pred_sample.shape)
     pred_chunked = torch.chunk(
         pred_sample, chunks=n_spk, dim=0 # dim=0 -> batch # modify
     )  # explicit number of chunks 2

@@ -4,6 +4,7 @@ import math
 import numpy as np
 import torch
 import torch as th
+import torch.nn.functional as F
 
 # from .losses import discretized_gaussian_log_likelihood, normal_kl
 # from .nn import mean_flat
@@ -431,10 +432,12 @@ class GaussianDiffusion:
         measurement_cond_fn=None,
         # sample_method=None,
         orig_x=None,
+        y=None,
         # z=None,
         degradation=None,
         # use_rg_bwe: bool = True,
         start=None,
+        task_kwargs=None,
         # rho = None
     ):
         """
@@ -485,6 +488,34 @@ class GaussianDiffusion:
             final = sample
             break
 
+        # embedding
+        # x_0 = final["pred_xstart"]
+        # x_0.requires_grad_(True)
+        # r_embedding = task_kwargs['r_e']
+        # embedding = classifier.encode_batch(x_0.squeeze(1))
+        # n_spk = x_0.shape[0]
+        # loss = 0
+        # for i in range(n_spk):
+        #         e = embedding[i * y.size(0):(i + 1) * y.size(0), ...]
+        #         r_e = r_embedding[i * y.size(0):(i + 1) * y.size(0), ...]
+        #         loss1 = F.cosine_similarity(e, r_e, dim=-1)
+        #         loss2 = 0
+        #         if i != 0:
+        #             loss2 = -F.cosine_similarity(e, r_e, dim=-1)
+        #         temp_embedding = e
+        #         loss += loss1 + loss2
+
+        # condition = th.autograd.grad(
+        #     outputs=loss, inputs=x_0, retain_graph=True)[0]
+        
+        # normguide1 = th.linalg.norm(condition) / x_0.size(-1) ** 0.5
+        # alphas = th.from_numpy(self.alphas).to(device)
+        # sigma = th.sqrt(alphas[start])
+        # s1 = 0.01 / (normguide1 * sigma + 1e-6)
+        # # x_0 = x_0 + (th.vmap(lambda a,b: a*b)(s1, condition) * 0.5).detach()
+        # x_0 = x_0 + s1 * condition * 0.5
+
+        # return x_0
         return final["pred_xstart"]
 
     def p_sample_loop_progressive(

@@ -10,7 +10,7 @@ import torchaudio
 # from inference_utils import calculate_all_metrics, log_results
 import logging
 
-logging.basicConfig(filename='/media/md01/home/hualing/PnP-DM-public/results_libritts_720k_coefficient/source_separation/each_sisnr.txt', level=logging.INFO, format='%(message)s')
+logging.basicConfig(filename='/media/md01/home/hualing/PnP-DM-public/results_libritts_720k_3_spk/source_separation/each_sisnr.txt', level=logging.INFO, format='%(message)s')
 
 def SiSNR(real_samples, samples):
     alpha = (samples * real_samples).sum(-1, keepdims=True) / (
@@ -25,29 +25,29 @@ def SiSNR(real_samples, samples):
 
 
 if __name__=="__main__":
-    original_path = "/media/md01/home/hualing/PnP-DM-public/results_libritts_720k_coefficient/source_separation/original"
-    degraded_path = "/media/md01/home/hualing/Undiff/results/source_separation_inference/degraded"
-    generated_path = "/media/md01/home/hualing/PnP-DM-public/results_libritts_720k_coefficient/source_separation/generated"
+    original_path = "/media/md01/home/hualing/PnP-DM-public/results_libritts_720k_3_spk/source_separation/original"
+    degraded_path = "/media/md01/home/hualing/PnP-DM-public/results_libritts_720k_3_spk/source_separation/degraded"
+    generated_path = "/media/md01/home/hualing/PnP-DM-public/results_libritts_720k_3_spk/source_separation/generated"
     diarization_path = "/home/hualing/Undiff/results_new_sampling/source_separation_inference/diarization"
 
     all_sisnr = []
     sisnr_dict = {}
 
     files = os.listdir(original_path)
-    N = len(files) // 2
+    N = len(files) // 3
     print(f"N = {N}")
 
     for i in tqdm(range(N)):
         original_w1, sr = torchaudio.load(os.path.join(original_path, f"Sample_{i}_1.wav"))
         original_w2, sr = torchaudio.load(os.path.join(original_path, f"Sample_{i}_2.wav"))
-        # original_w3, sr = torchaudio.load(os.path.join(original_path, f"Sample_{i}_3.wav"))
+        original_w3, sr = torchaudio.load(os.path.join(original_path, f"Sample_{i}_3.wav"))
         generated_w1, sr = torchaudio.load(os.path.join(generated_path, f"Sample_{i}_1.wav"))
         generated_w2, sr = torchaudio.load(os.path.join(generated_path, f"Sample_{i}_2.wav"))
         # generated_w3, sr = torchaudio.load(os.path.join(generated_path, f"Sample_{i}_3.wav"))
-        # degraded_w, sr = torchaudio.load(os.path.join(degraded_path, f"Sample_{i}.wav")) # mix 的語音
+        degraded_w, sr = torchaudio.load(os.path.join(degraded_path, f"Sample_{i}.wav")) # mix 的語音
     
-        original_w = torch.cat([original_w1, original_w2], -1).view(1, 1, -1)
-        generated_signals = [generated_w1, generated_w2]
+        original_w = torch.cat([original_w1, original_w2, original_w3], -1).view(1, 1, -1)
+        generated_signals = [degraded_w, degraded_w, degraded_w]
         generated_ws = [torch.cat(perm, -1).view(1, 1, -1) for perm in permutations(generated_signals)]
 
         sisnr = max([SiSNR(original_w, generated_w) for generated_w in generated_ws])

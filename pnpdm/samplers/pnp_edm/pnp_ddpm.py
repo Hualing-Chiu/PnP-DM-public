@@ -15,11 +15,11 @@ class PnPDDPM:
         self.noiser = noiser
         self.device = device
 
-    def __call__(self, g_x, y_n, record=False, save_root=None):
+    def __call__(self, g_x, y_n, record=False, save_root=None, task_kwargs=None):
         samples = []
         # initialize
-        # x = torch.randn_like(g_x).to(g_x.device)
-        x = torch.cat([y_n.clone(), y_n.clone()], dim=0)
+        x = torch.randn_like(g_x).to(g_x.device)
+        # x = torch.cat([y_n.clone(), y_n.clone()], dim=0)
         # T = len(self.diffusion.betas) - 1
         # print(x.shape)
         # x = self.operator.initialize(g_x, y_n)
@@ -41,10 +41,7 @@ class PnPDDPM:
             rho_iter = self.config.rho * (self.config.rho_decay_rate ** i)
             rho_iter = max(rho_iter, self.config.rho_min)
 
-            # (1 - i / N) * T
-            # t = (1 - i / self.config.num_iters) * self.diffusion.betas
-            # z = self.operator.proximal_generator(x, y_n, self.diffusion, t, self.noiser.sigma, rho_iter)
-            # one-dim            
+            # (1 - i / N) * T      
             # print(f"t: {t}")
             # prior step
             z = self.diffusion.p_sample_loop(
@@ -55,19 +52,20 @@ class PnPDDPM:
                 clip_denoised=False,
                 model_kwargs={},
                 orig_x=g_x,
+                y=y_n,
                 progress=True,
                 degradation=None,
                 # z=z,
                 start=t,
+                task_kwargs=task_kwargs
                 # rho=rho_iter
             ).cpu()
-
             t = int((1 - i / self.config.num_iters) * (len(self.diffusion.betas) - 1))
             
             # likelihood step
             x = self.operator.proximal_generator(z, y_n, self.diffusion, t, self.noiser.sigma, rho=rho_iter)
             # x = z * (i / self.config.num_iters) + torch.randn_like(z) * (1 - i / self.config.num_iters)
-            
+
             # x = self.diffusion._predict_xstart_from_eps(z, t)
             # print(torch.max(z))
             # print(f"x.shape: {x.shape}")
