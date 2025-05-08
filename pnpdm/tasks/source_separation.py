@@ -23,7 +23,6 @@ class SourceSeparation(NonLinearOperator):
     
         alpha = self.coefficient_cal(x, y)
         alpha = torch.clamp(alpha, min=1e-4)
-        alpha = alpha / (alpha.sum() + 1e-8)
         print(f"alpha: {alpha}")
         alpha = alpha.view(n_spk, 1, 1)
         recon = torch.sum(alpha * z, dim=0, keepdim=True)  # (1, 1, T)
