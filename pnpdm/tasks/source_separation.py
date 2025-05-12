@@ -20,53 +20,83 @@ class SourceSeparation(NonLinearOperator):
         z = x.clone().detach()
         n_spk = z.shape[0]
         t = torch.tensor([i] * z.shape[0])
-    
-        alpha = self.coefficient_cal(x, y)
-        alpha = torch.clamp(alpha, min=1e-4)
-        print(f"alpha: {alpha}")
-        alpha = alpha.view(n_spk, 1, 1)
-        recon = torch.sum(alpha * z, dim=0, keepdim=True)  # (1, 1, T)
-        log_p_y_x = y - recon # (1, 1, T)
-        # log_p_y_x = (y - (
-        #     torch.stack(torch.chunk(z, n_spk, 0)).sum(0)
-        # ))
-        log_p_y_x = (repeat(log_p_y_x, "h ... -> (r h) ...", r=n_spk)) / n_spk
-        z = z + log_p_y_x / alpha
+
+        log_p_y_x = (y - (
+            torch.stack(torch.chunk(z, n_spk, 0)).sum(0)
+        ))
+        log_p_y_x = repeat(log_p_y_x, "h ... -> (r h) ...", r=n_spk) / n_spk
+        z = z + log_p_y_x
+
+        # === Add orthogonality regularization ===
+        z.requires_grad_(True)
+        z_ = z.squeeze(1)  # shape: (n_spk, T)
+        ortho_loss = 0.
+        for i in range(n_spk):
+            for j in range(i + 1, n_spk):
+                cos_sim = F.cosine_similarity(z_[i], z_[j], dim=-1).abs().mean()
+                ortho_loss += cos_sim
+        ortho_loss = ortho_loss / (n_spk * (n_spk - 1) / 2) # n * (n-1) / 2
+
+        # gradient step to reduce cosine similarity
+        z = z - (gamma / rho**2) * torch.autograd.grad(ortho_loss, z, retain_graph=True)[0].detach()
+
         # print(log_p_y_x.sum(dim=-1, keepdim=True))
-        # print(t)
+        # print(f"rho: {rho}")
         if t[0] != 0:
             z = diffusion.q_sample(z, t)
             z = z - (gamma / rho**2) * (z - x)
 
         return z.float()
 
-    def coefficient_cal(self, x, y):
-        """
-        用最小平方法計算混合語音中每個來源訊號的係數 alpha
-        """
-        # x_1, x_2 = x[0].unsqueeze(0), x[1].unsqueeze(0) # (1, 1, T)
-        # y_norm = torch.norm(y, dim=-1, keepdim=True) # (1, 1, T)
-        # x1_norm = torch.norm(x_1, dim=-1, keepdim=True) # (1, 1, T)
-        # x2_norm = torch.norm(x_2, dim=-1, keepdim=True)
-        # M = torch.Tensor([[torch.mean(x1_norm * x1_norm), torch.mean(x1_norm * x2_norm)],
-        #                   [torch.mean(x1_norm * x2_norm), torch.mean(x2_norm * x2_norm)]])
-        
-        # N = torch.Tensor([[torch.mean(x1_norm * y_norm)], [torch.mean(x2_norm * y_norm)]])
-        
-        x_1, x_2 = x[0].unsqueeze(0), x[1].unsqueeze(0) # (1, 1, T)
-        y_sq = y ** 2
-        x1_sq = x_1 ** 2
-        x2_sq = x_2 ** 2
-        # print(f"x_1: {x_1.shape}, x_2: {x_2.shape}")
-        # print(f"y: {y.shape}")
+    # def coefficient_cal(self, x, y):
+    #     """
+    #     用最小平方法計算混合語音中每個來源訊號的係數 alpha
+    #     """
+    #     # x_1, x_2 = x[0].unsqueeze(0), x[1].unsqueeze(0) # (1, 1, T)
 
-        M = torch.Tensor([[torch.mean(x1_sq * x1_sq), torch.mean(x1_sq * x2_sq)],
-                          [torch.mean(x1_sq * x2_sq), torch.mean(x2_sq * x2_sq)]])
+    #     # M = torch.Tensor([[torch.mean(x_1 * x_1), torch.mean(x_1 * x_2)],
+    #     #                   [torch.mean(x_2 * x_1), torch.mean(x_2 * x_2)]])
         
-        N = torch.Tensor([[torch.mean(x1_sq * y_sq)], [torch.mean(x2_sq * y_sq)]])
+    #     # N = torch.Tensor([[torch.mean(x_1 * y)], [torch.mean(x_2 * y)]])
 
-        alpha = torch.linalg.solve(M, N).squeeze()
-        return torch.sqrt(alpha)
+    #     # alpha = torch.linalg.solve(M, N).squeeze()
+    #     # print(f"alpha: {alpha}")
+    #     # return alpha
+    #     x_1, x_2 = x[0].unsqueeze(0), x[1].unsqueeze(0)  # (1, 1, T)
+    #     best_loss = float('inf')
+    #     best_alpha = None
+    #     best_shift = (0, 0)
+    #     max_shift = 50  # Maximum shift value
+
+    #     for shift1 in range(-max_shift, max_shift + 1, 10):
+    #         for shift2 in range(-max_shift, max_shift + 1, 10):
+    #             x1_shifted = torch.roll(x_1, shifts=shift1, dims=-1)
+    #             x2_shifted = torch.roll(x_2, shifts=shift2, dims=-1)
+
+    #             M = torch.Tensor([
+    #                 [torch.mean(x1_shifted * x1_shifted), torch.mean(x1_shifted * x2_shifted)],
+    #                 [torch.mean(x2_shifted * x1_shifted), torch.mean(x2_shifted * x2_shifted)]
+    #             ])
+    #             N = torch.Tensor([
+    #                 [torch.mean(x1_shifted * y)],
+    #                 [torch.mean(x2_shifted * y)]
+    #             ])
+
+    #             try:
+    #                 alpha = torch.linalg.solve(M, N).squeeze()
+    #                 recon = alpha[0] * x1_shifted + alpha[1] * x2_shifted
+    #                 loss = torch.mean((recon - y) ** 2)
+
+    #                 if loss < best_loss:
+    #                     best_loss = loss
+    #                     best_alpha = alpha
+    #                     best_shift = (shift1, shift2)
+    #             except RuntimeError:
+    #                 continue
+
+    #     print(f"best shift: {best_shift}, alpha: {best_alpha}")
+    #     return best_alpha, best_shift
+   
     # def initialize(self, gt, y):
     #     torch.randn_like(gt)
 
