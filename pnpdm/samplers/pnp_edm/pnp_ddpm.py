@@ -38,7 +38,7 @@ class PnPDDPM:
         assert self.config.num_iters - 1 in iters_count_as_sample, "num_iters-1 should be included in iters_count_as_sample"
         sub_pbar = tqdm(range(1, self.config.num_iters))
         for i in sub_pbar:
-            rho_iter = self.config.rho * (self.config.rho_decay_rate ** i)
+            rho_iter = self.config.rho * (self.config.rho_decay_rate ** (i - 1))
             rho_iter = max(rho_iter, self.config.rho_min)
 
             # (1 - i / N) * T      

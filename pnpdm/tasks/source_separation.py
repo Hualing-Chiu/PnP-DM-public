@@ -29,18 +29,11 @@ class SourceSeparation(NonLinearOperator):
 
         # === Add orthogonality regularization ===
         z.requires_grad_(True)
-        z_ = z.squeeze(1)  # shape: (n_spk, T)
-        ortho_loss = 0.
-        for i in range(n_spk):
-            for j in range(i + 1, n_spk):
-                cos_sim = F.cosine_similarity(z_[i], z_[j], dim=-1).abs().mean()
-                ortho_loss += cos_sim
-        ortho_loss = ortho_loss / (n_spk * (n_spk - 1) / 2) # n * (n-1) / 2
+        # for _ in range(5):
+        ortho_loss = self.compute_ortho_loss(z.squeeze(1))
+        grad = torch.autograd.grad(ortho_loss, z, retain_graph=True)[0].detach()
+        z = z - (gamma / rho**2) * grad
 
-        # gradient step to reduce cosine similarity
-        z = z - (gamma / rho**2) * torch.autograd.grad(ortho_loss, z, retain_graph=True)[0].detach()
-
-        # print(log_p_y_x.sum(dim=-1, keepdim=True))
         # print(f"rho: {rho}")
         if t[0] != 0:
             z = diffusion.q_sample(z, t)
@@ -48,6 +41,11 @@ class SourceSeparation(NonLinearOperator):
 
         return z.float()
 
+    def compute_ortho_loss(self, z_):
+        z_norm = F.normalize(z_, p=2, dim=-1)
+        cos_matrix = torch.matmul(z_norm, z_norm.T) # z_norm @ z_norm^T
+        return (cos_matrix.abs().sum() - z_.shape[0]) / (z_.shape[0] * (z_.shape[0] - 1))
+        
     # def coefficient_cal(self, x, y):
     #     """
     #     用最小平方法計算混合語音中每個來源訊號的係數 alpha
