@@ -20,8 +20,8 @@ from taming.modules.losses.lpips import LPIPS
 from pnpdm.improved_diffusion.inference_utils import calculate_all_metrics, log_results, remove_prefix_from_state_dict
 from pnpdm.data.utils import cut_audio_segment
 from pnpdm.improved_diffusion.metrics import Metric
-from speechbrain.inference.speaker import EncoderClassifier
-classifier = EncoderClassifier.from_hparams(source="speechbrain/spkrec-ecapa-voxceleb")
+# from speechbrain.inference.speaker import EncoderClassifier
+# classifier = EncoderClassifier.from_hparams(source="speechbrain/spkrec-ecapa-voxceleb")
 
 @hydra.main(version_base="1.2", config_path="configs", config_name="default")
 def posterior_sample(cfg):
@@ -65,7 +65,7 @@ def posterior_sample(cfg):
     sampler = get_sampler(sampler_config, model=model, diffusion=diffusion, degradation=degradation, operator=operator, noiser=noiser, device=device)
 
     # inference
-    output_dir = os.path.join("results_libritts_720k_embedding", task_config.operator.name)
+    output_dir = os.path.join("results_libritts_720k_2_grad", task_config.operator.name)
     generated_path = os.path.join(output_dir, "generated")
     original_path = os.path.join(output_dir, "original")
     degraded_path = os.path.join(output_dir, "degraded")
@@ -92,14 +92,14 @@ def posterior_sample(cfg):
         degraded_sample = degradation(x).cpu() # y_n
         
         # reference
-        referance_1 = random.choice([file for file in files_dict[files_key[0]] if file not in f[0]])
-        referance_2 = random.choice([file for file in files_dict[files_key[1]] if file not in f[1]])
-        referance_f = (referance_1, referance_2)
-        r_x = load_audios(referance_f, 16000, None, "cpu")
-        r_x = prepare_audio_before_degradation(r_x)
+        # referance_1 = random.choice([file for file in files_dict[files_key[0]] if file not in f[0]])
+        # referance_2 = random.choice([file for file in files_dict[files_key[1]] if file not in f[1]])
+        # referance_f = (referance_1, referance_2)
+        # r_x = load_audios(referance_f, 16000, None, "cpu")
+        # r_x = prepare_audio_before_degradation(r_x)
 
-        with torch.no_grad():
-            r_embedding = classifier.encode_batch(r_x.squeeze(1))
+        # with torch.no_grad():
+        #     r_embedding = classifier.encode_batch(r_x.squeeze(1))
 
         # sampling
         sample_list = []
@@ -109,7 +109,7 @@ def posterior_sample(cfg):
                 y_n=degraded_sample,
                 record=cfg.record,
                 save_root=generated_path,
-                task_kwargs= {'r_e': r_embedding}
+                task_kwargs= None # {'r_e': r_embedding}
             )
 
             sample_list.append(sample)

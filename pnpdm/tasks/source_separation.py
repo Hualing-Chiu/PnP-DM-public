@@ -4,6 +4,8 @@ import torch.nn.functional as F
 import numpy as np
 from einops import repeat
 from . import register_operator, LinearOperator, LinearSVDOperator, NonLinearOperator
+from speechbrain.inference.speaker import EncoderClassifier
+classifier = EncoderClassifier.from_hparams(source="speechbrain/spkrec-ecapa-voxceleb")
 
 
 @register_operator(name='source_separation')
@@ -28,11 +30,13 @@ class SourceSeparation(NonLinearOperator):
         z = z + log_p_y_x
 
         # === Add orthogonality regularization ===
-        # z.requires_grad_(True)
-        # for _ in range(10):
-        #     ortho_loss = self.compute_ortho_loss(z.squeeze(1))
-        #     grad = torch.autograd.grad(ortho_loss, z, retain_graph=True)[0].detach()
-        #     z = z - (gamma / rho**2) * grad
+        z.requires_grad_(True)
+        # for _ in range(5):
+        embedding = classifier.encode_batch(z.squeeze(1))
+
+        ortho_loss = self.compute_ortho_loss(embedding.squeeze(1))
+        grad = torch.autograd.grad(ortho_loss, z, retain_graph=True)[0].detach()
+        z = z - (gamma / rho**2) * grad
 
         # print(f"rho: {rho}")
         if t[0] != 0:
