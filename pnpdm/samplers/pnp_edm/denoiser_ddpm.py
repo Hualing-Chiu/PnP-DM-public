@@ -491,20 +491,19 @@ class GaussianDiffusion:
         # embedding
         # x_0 = final["pred_xstart"]
         # x_0.requires_grad_(True)
-        # r_embedding = task_kwargs['r_e']
-        # embedding = classifier.encode_batch(x_0.squeeze(1))
+        # r_embedding = F.normalize(task_kwargs['r_e'])
+        # embedding = F.normalize(classifier.encode_batch(x_0.squeeze(1)))
         # n_spk = x_0.shape[0]
-        # loss = pos = neg = 0
+        # loss = 0
         # for i in range(n_spk):
         #     e = embedding[i * y.size(0):(i + 1) * y.size(0), ...]
         #     r_e = r_embedding[i * y.size(0):(i + 1) * y.size(0), ...]
-        #     pos += F.cosine_similarity(e, r_e, dim=-1)
+        #     loss += F.cosine_similarity(e, r_e, dim=-1).mean()
 
         #     for j in range(i + 1, n_spk):
         #         temp_e = embedding[j * y.size(0):(j + 1) * y.size(0), ...]
-        #         neg += -F.cosine_similarity(e, temp_e, dim=-1)
+        #         loss += -F.cosine_similarity(e, temp_e, dim=-1).mean()
 
-        # loss = pos + 0.5 * neg
         # condition = th.autograd.grad(
         #     outputs=loss, inputs=x_0, retain_graph=True)[0]
         

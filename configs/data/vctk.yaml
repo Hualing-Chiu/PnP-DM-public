@@ -3,5 +3,9 @@ name: vctk
 root:
   # - /media/md01/public_datasets/VCTK-Corpus-0.92/wav16_silence_trimmed/p254
   # - /media/md01/public_datasets/VCTK-Corpus-0.92/wav16_silence_trimmed/p248
-  - /media/md01/public_datasets/VCTK-Corpus-0.92/wav16_silence_trimmed/p226
-  - /media/md01/public_datasets/VCTK-Corpus-0.92/wav16_silence_trimmed/p228
+  - /home/public_datasets/VCTK-Corpus-0.92/wav48_silence_trimmed/p226
+  # - /home/public_datasets/VCTK-Corpus-0.92/wav48_silence_trimmed/p227
+  - /home/public_datasets/VCTK-Corpus-0.92/wav48_silence_trimmed/p228
+  # - /home/public_datasets/VCTK-Corpus-0.92/wav48_silence_trimmed/p229
+  # - /home/public_datasets/VCTK-Corpus-0.92/wav48_silence_trimmed/p225
+  # - /home/public_datasets/VCTK-Corpus-0.92/wav48_silence_trimmed/p230

@@ -32,7 +32,7 @@ class PnPDDPM:
         )[1:]
 
         # this line is for prior first then posterior
-        t = int((1) * (len(self.diffusion.betas) - 1))
+        t = int((1) * (len(self.diffusion.betas) - 1)) #199
 
 
         assert self.config.num_iters - 1 in iters_count_as_sample, "num_iters-1 should be included in iters_count_as_sample"
@@ -50,14 +50,13 @@ class PnPDDPM:
                 # noise=torch.randn_like(g_x).to(g_x.device) if i == 0 else x,
                 noise=None if i == 1 else x,
                 clip_denoised=False,
-                model_kwargs={},
+                model_kwargs=task_kwargs, # {}
                 orig_x=g_x,
                 y=y_n,
                 progress=True,
                 degradation=None,
-                # z=z,
                 start=t,
-                task_kwargs=task_kwargs
+                # task_kwargs=task_kwargs
                 # rho=rho_iter
             ).cpu()
             t = int((1 - i / self.config.num_iters) * (len(self.diffusion.betas) - 1))

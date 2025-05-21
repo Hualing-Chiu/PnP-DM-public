@@ -10,7 +10,7 @@ import torchaudio
 # from inference_utils import calculate_all_metrics, log_results
 import logging
 
-logging.basicConfig(filename='/media/md01/home/hualing/PnP-DM-public/results_libritts_720k_3_grad/source_separation/each_sisnr.txt', level=logging.INFO, format='%(message)s')
+logging.basicConfig(filename='/home/hualing/PnP-DM-public/results_vctk_820k_finetune_grad/source_separation/each_sisnr.txt', level=logging.INFO, format='%(message)s')
 
 def SiSNR(real_samples, samples):
     alpha = (samples * real_samples).sum(-1, keepdims=True) / (
@@ -25,19 +25,21 @@ def SiSNR(real_samples, samples):
 
 
 if __name__=="__main__":
-    original_path = "/media/md01/home/hualing/PnP-DM-public/results_libritts_720k_3_grad/source_separation/original"
+    original_path = "/home/hualing/PnP-DM-public/results_vctk_820k_finetune_grad/source_separation/original"
     degraded_path = "/media/md01/home/hualing/PnP-DM-public/results_libritts_720k_3_spk/source_separation/degraded"
-    generated_path = "/media/md01/home/hualing/PnP-DM-public/results_libritts_720k_3_grad/source_separation/generated"
-    diarization_path = "/home/hualing/Undiff/results_new_sampling/source_separation_inference/diarization"
-
+    generated_path = "/home/hualing/PnP-DM-public/results_vctk_820k_finetune_grad/source_separation/generated"
+    # diarization_path = "/home/hualing/Undiff/results_new_sampling/source_separation_inference/diarization"
+    
     all_sisnr = []
     sisnr_dict = {}
 
     files = os.listdir(original_path)
-    N = len(files) // 3
-    print(f"N = {N}")
+    N = len(files) // 2
+    start_idx = 0 # 735 # 356
+    end_idx = 356 # N # 734
+    print(f"N = {end_idx - start_idx}")
 
-    for i in tqdm(range(N)):
+    for i in tqdm(range(0, 356)):
         original_w1, sr = torchaudio.load(os.path.join(original_path, f"Sample_{i}_1.wav"))
         original_w2, sr = torchaudio.load(os.path.join(original_path, f"Sample_{i}_2.wav"))
         original_w3, sr = torchaudio.load(os.path.join(original_path, f"Sample_{i}_3.wav"))

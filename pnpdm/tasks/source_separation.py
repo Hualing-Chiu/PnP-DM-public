@@ -7,7 +7,6 @@ from . import register_operator, LinearOperator, LinearSVDOperator, NonLinearOpe
 from speechbrain.inference.speaker import EncoderClassifier
 classifier = EncoderClassifier.from_hparams(source="speechbrain/spkrec-ecapa-voxceleb")
 
-
 @register_operator(name='source_separation')
 class SourceSeparation(NonLinearOperator):
     def __init__(self, channels, device):
@@ -36,20 +35,28 @@ class SourceSeparation(NonLinearOperator):
 
         ortho_loss = self.compute_ortho_loss(embedding.squeeze(1))
         grad = torch.autograd.grad(ortho_loss, z, retain_graph=True)[0].detach()
-        z = z - (gamma / rho**2) * grad
-
+        # z = z - (gamma / rho**2) * grad
+        z = z - (rho * gamma) * grad - (gamma / rho**2) * (z - x)
+        # z = z - (gamma / rho**2) * (z - x)
         # print(f"rho: {rho}")
         if t[0] != 0:
-            z = diffusion.q_sample(z, t)
-            z = z - (gamma / rho**2) * (z - x)
+            z = diffusion.q_sample(z, t)   
 
         return z.float()
 
-    def compute_ortho_loss(self, z_):
-        z_norm = F.normalize(z_, p=2, dim=-1)
-        cos_matrix = torch.matmul(z_norm, z_norm.T) # z_norm @ z_norm^T
-        return (cos_matrix.abs().sum() - z_.shape[0]) / (z_.shape[0] * (z_.shape[0] - 1))
+    # def compute_ortho_loss(self, z_):
+    #     z_norm = F.normalize(z_, p=2, dim=-1)
+    #     cos_matrix = torch.matmul(z_norm, z_norm.T) # z_norm @ z_norm^T
+    #     return (cos_matrix.abs().sum() - z_.shape[0]) / (z_.shape[0] * (z_.shape[0] - 1))
         
+    def compute_ortho_loss(self, z_):
+        """
+        根據論文公式 ||V^T V - I||_F^2 實作 z_ 為 [B, D] 的嵌入矩陣。
+        """
+        z_norm = F.normalize(z_, p=2, dim=-1)  # 每個 embedding 單位化
+        dot_matrix = torch.matmul(z_norm.T, z_norm)  # V^T V, shape = [D, D]
+        identity = torch.eye(dot_matrix.size(0), device=z_.device)
+        return F.mse_loss(dot_matrix, identity)  # 等價於 Frobenius norm 平方
     # def coefficient_cal(self, x, y):
     #     """
     #     用最小平方法計算混合語音中每個來源訊號的係數 alpha

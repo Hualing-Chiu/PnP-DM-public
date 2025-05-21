@@ -55,7 +55,7 @@ def posterior_sample(cfg):
     #     pl_ckpt["state_dict"], j=1
     # )
     # load model
-    model.load_state_dict(pl_ckpt, strict=False)
+    model.load_state_dict(pl_ckpt)
     model = model.to(device)
     model.eval()
 
@@ -65,7 +65,7 @@ def posterior_sample(cfg):
     sampler = get_sampler(sampler_config, model=model, diffusion=diffusion, degradation=degradation, operator=operator, noiser=noiser, device=device)
 
     # inference
-    output_dir = os.path.join("results_libritts_720k_2_grad", task_config.operator.name)
+    output_dir = os.path.join("results_vctk_820k_finetune_grad_spk_condition", task_config.operator.name)
     generated_path = os.path.join(output_dir, "generated")
     original_path = os.path.join(output_dir, "original")
     degraded_path = os.path.join(output_dir, "degraded")
@@ -73,19 +73,20 @@ def posterior_sample(cfg):
         if not exists(path):
             os.makedirs(path)
  
-    stats_path = "/media/md01/home/hualing/PnP-DM-public/libritts_mean_variance.json"
-    with open(stats_path, "r") as f:
-        stats = json.load(f)
+    # stats_path = "/media/md01/home/hualing/PnP-DM-public/libritts_mean_variance.json"
+    # with open(stats_path, "r") as f:
+    #     stats = json.load(f)
 
     # train_mean = stats["mean"]
     # train_std = stats["variance"] ** 0.5
     # inference
     generated_samples = []
     real_samples = []
-    files_key = list(files_dict.keys())
+    ref_samples= []
+    files_key = list(files_dict.keys()) # [spk0, spk1, ...]
 
     for i, f in enumerate(zip(*files_dict.values())):
-        if i > 50: break
+        # if i > 50: break
 
         x = load_audios(f, 16000, None, "cpu")
         x = prepare_audio_before_degradation(x)
@@ -100,6 +101,14 @@ def posterior_sample(cfg):
 
         # with torch.no_grad():
         #     r_embedding = classifier.encode_batch(r_x.squeeze(1))
+        # ref & mask_ref
+        for j, k in enumerate(files_key):
+            candidate = [file for file in files_dict[k] if file not in f[j]]
+            ref_samples.append(random.choice(candidate))
+
+        ref = load_audios(ref_samples, 16000, None, "cpu")
+        ref = prepare_audio_before_degradation(ref) # [2 ,1 ,T]
+        mask_ref = (ref.squeeze(1) != 0).to(torch.bool)
 
         # sampling
         sample_list = []
@@ -109,7 +118,10 @@ def posterior_sample(cfg):
                 y_n=degraded_sample,
                 record=cfg.record,
                 save_root=generated_path,
-                task_kwargs= None # {'r_e': r_embedding}
+                task_kwargs= {
+                    "ref": ref.to(device),
+                    "mask_ref": mask_ref.to(device),
+                }
             )
 
             sample_list.append(sample)
@@ -169,8 +181,8 @@ def exists(path: str):
         return os.path.exists(path)
 
 def prepara_data(audio_files: List[str]):
-    # filtered_audio_files = [[file for file in files if "mic1" in file] for files in audio_files]
-    filtered_audio_files = [[file for file in files if file.endswith('wav')] for files in audio_files]
+    filtered_audio_files = [[file for file in files if "mic1" in file] for files in audio_files]
+    # filtered_audio_files = [[file for file in files if file.endswith('wav')] for files in audio_files]
     n_samples = min([len(files) for files in filtered_audio_files])
 
     return {f"spk{i}": random.sample(files, k=n_samples)  for i, files in enumerate(filtered_audio_files)}
@@ -246,13 +258,6 @@ def save_audios(
         torchaudio.save(
             os.path.join(original_path, name), cur_orig.view(1, -1), sr
         )
-    
-    # concate the separate audio
-    # concatenated_pred = torch.cat(pred_chunked, dim=-1)
-    # name = f"Sample_{idx}.wav"
-    # torchaudio.save(
-    #     os.path.join(concatenate_path, name), concatenated_pred.view(1, -1), sr
-    # )
 
     # redefine name for degraded
     name = f"Sample_{idx}.wav"
