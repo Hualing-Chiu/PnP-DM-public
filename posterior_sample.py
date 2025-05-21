@@ -91,16 +91,7 @@ def posterior_sample(cfg):
         x = load_audios(f, 16000, None, "cpu")
         x = prepare_audio_before_degradation(x)
         degraded_sample = degradation(x).cpu() # y_n
-        
-        # reference
-        # referance_1 = random.choice([file for file in files_dict[files_key[0]] if file not in f[0]])
-        # referance_2 = random.choice([file for file in files_dict[files_key[1]] if file not in f[1]])
-        # referance_f = (referance_1, referance_2)
-        # r_x = load_audios(referance_f, 16000, None, "cpu")
-        # r_x = prepare_audio_before_degradation(r_x)
 
-        # with torch.no_grad():
-        #     r_embedding = classifier.encode_batch(r_x.squeeze(1))
         # ref & mask_ref
         for j, k in enumerate(files_key):
             candidate = [file for file in files_dict[k] if file not in f[j]]
