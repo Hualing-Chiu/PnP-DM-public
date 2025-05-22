@@ -65,7 +65,7 @@ def posterior_sample(cfg):
     sampler = get_sampler(sampler_config, model=model, diffusion=diffusion, degradation=degradation, operator=operator, noiser=noiser, device=device)
 
     # inference
-    output_dir = os.path.join("results_vctk_820k_finetune_grad_spk_condition", task_config.operator.name)
+    output_dir = os.path.join("results_vctk_820k_finetune_grad_3_spk_condition", task_config.operator.name)
     generated_path = os.path.join(output_dir, "generated")
     original_path = os.path.join(output_dir, "original")
     degraded_path = os.path.join(output_dir, "degraded")
@@ -82,12 +82,11 @@ def posterior_sample(cfg):
     # inference
     generated_samples = []
     real_samples = []
-    ref_samples= []
     files_key = list(files_dict.keys()) # [spk0, spk1, ...]
 
     for i, f in enumerate(zip(*files_dict.values())):
         # if i > 50: break
-
+        ref_samples= []
         x = load_audios(f, 16000, None, "cpu")
         x = prepare_audio_before_degradation(x)
         degraded_sample = degradation(x).cpu() # y_n
@@ -98,8 +97,9 @@ def posterior_sample(cfg):
             ref_samples.append(random.choice(candidate))
 
         ref = load_audios(ref_samples, 16000, None, "cpu")
-        ref = prepare_audio_before_degradation(ref) # [2 ,1 ,T]
-        mask_ref = (ref.squeeze(1) != 0).to(torch.bool)
+        ref = prepare_audio_before_degradation(ref).squeeze(1) # [2 ,1 ,T]
+        print(ref.shape)
+        mask_ref = (ref != 0).to(torch.bool)
 
         # sampling
         sample_list = []
@@ -152,7 +152,7 @@ def posterior_sample(cfg):
             samples_mean, 
             degraded_sample, 
             x, 
-            i, 
+            i+356, 
             len(audio_files), 
             sr=16000, 
             # train_mean=train_mean, 
@@ -243,21 +243,21 @@ def save_audios(
 
         name = f"Sample_{idx}_{i + 1}.wav"
         torchaudio.save(
-            os.path.join(generated_path, name), cur_pred.view(1, -1), sr
+            os.path.join(generated_path, name), cur_pred.detach().cpu().view(1, -1), sr
         )
         print(os.path.join(generated_path, name))
         torchaudio.save(
-            os.path.join(original_path, name), cur_orig.view(1, -1), sr
+            os.path.join(original_path, name), cur_orig.detach().cpu().view(1, -1), sr
         )
 
     # redefine name for degraded
     name = f"Sample_{idx}.wav"
     torchaudio.save(
-        os.path.join(degraded_path, name), degraded_sample.view(1, -1), sr
+        os.path.join(degraded_path, name), degraded_sample.detach().cpu().view(1, -1), sr
     )
 
 def degradation(x: torch.Tensor) -> torch.Tensor:
-    return torch.stack([s for s in torch.chunk(x, 2, dim=0)]).sum(0)
+    return torch.stack([s for s in torch.chunk(x, 3, dim=0)]).sum(0)
 
 def sisnr(x, y):
         alpha = (x * y).sum(-1, keepdims=True) / (

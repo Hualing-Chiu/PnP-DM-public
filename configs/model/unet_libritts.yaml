@@ -14,3 +14,4 @@ model:
   num_head_channels: 32
 
 model_path: weights/ema_0.9999_820000_finetune.pt
+# model_path: weights/ema_0.9999_720000.pt
