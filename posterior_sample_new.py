@@ -1,8 +1,11 @@
-import torch, os, hydra, logging, json
+import torch, os, hydra, logging
 import torchaudio
 import itertools
 import random
+import json
 import gc
+import re
+import glob
 import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
@@ -40,10 +43,12 @@ def posterior_sample(cfg):
     ]
     # print([type(m) for m in metrics_list])
     # source separation load data
-    if task_config.operator.name == "source_separation":
-        audio_files = [list(map(lambda x: os.path.join(d, x), os.listdir(d))) for d in data_config.root] # List[str]
+    # if task_config.operator.name == "source_separation":
+    #     audio_files = [list(map(lambda x: os.path.join(d, x), os.listdir(d))) for d in data_config.root] # List[str]
 
-    files_dict = prepara_data(audio_files) 
+    # files_dict = prepara_data(audio_files) 
+    if task_config.operator.name == "source_separation":
+        audio_files = prepare_data(data_config.root[0])  # List[List[str]]
 
     model = get_model(model_config.name, **model_config.model)
     # load checkpoint
@@ -62,35 +67,41 @@ def posterior_sample(cfg):
     sampler = get_sampler(sampler_config, model=model, diffusion=diffusion, degradation=degradation, operator=operator, noiser=noiser, device=device)
 
     # inference
-    output_dir = os.path.join("test", task_config.operator.name) # results_vctk_820k_finetune_grad_spk_condition
+    output_dir = os.path.join("results_libritts_720k_2spk_20", task_config.operator.name) # results_vctk_820k_finetune_grad_spk_condition
     generated_path = os.path.join(output_dir, "generated")
     original_path = os.path.join(output_dir, "original")
     degraded_path = os.path.join(output_dir, "degraded")
-    reference_path = os.path.join(output_dir, "reference")
-    for path in [generated_path, original_path, degraded_path, reference_path]:
+    for path in [generated_path, original_path, degraded_path]:
         if not exists(path):
             os.makedirs(path)
  
+    # stats_path = "/media/md01/home/hualing/PnP-DM-public/libritts_mean_variance.json"
+    # with open(stats_path, "r") as f:
+    #     stats = json.load(f)
+
+    # train_mean = stats["mean"]
+    # train_std = stats["variance"] ** 0.5
     # inference
     generated_samples = []
     real_samples = []
-    files_key = list(files_dict.keys()) # [spk0, spk1, ...]
+    # files_key = list(files_dict.keys()) # [spk0, spk1, ...]
 
-    for i, f in enumerate(zip(*files_dict.values())):
+    # for i, f in enumerate(zip(*files_dict.values())):
+    for i, path in audio_files.items():
         # if i > 10: break
-        ref_samples= []
-        x = load_audios(f, 16000, None, "cpu")
+        # ref_samples= []
+        x = load_audios(path, 16000, None, "cpu")
         x = prepare_audio_before_degradation(x)
         degraded_sample = degradation(x).cpu() # y_n
 
         # ref & mask_ref
-        for j, k in enumerate(files_key):
-            candidate = [file for file in files_dict[k] if file not in f[j]]
-            ref_samples.append(random.choice(candidate))
+        # for j, k in enumerate(files_key):
+        #     candidate = [file for file in files_dict[k] if file not in f[j]]
+        #     ref_samples.append(random.choice(candidate))
 
-        ref = load_audios(ref_samples, 16000, None, "cpu")
-        ref = prepare_audio_before_degradation(ref).squeeze(1) # [2 ,1 ,T]
-        mask_ref = torch.zeros_like(ref).to(torch.bool)
+        # ref = load_audios(ref_samples, 16000, None, "cpu")
+        # ref = prepare_audio_before_degradation(ref).squeeze(1) # [2 ,1 ,T]
+        # mask_ref = torch.zeros_like(ref).to(torch.bool)
 
         # sampling
         sample_list = []
@@ -100,10 +111,11 @@ def posterior_sample(cfg):
                 y_n=degraded_sample,
                 record=cfg.record,
                 save_root=generated_path,
-                task_kwargs= {
-                    "ref": ref.to(device),
-                    "mask_ref": mask_ref.to(device),
-                }
+                # task_kwargs= {
+                #     "ref": ref.to(device),
+                #     "mask_ref": mask_ref.to(device),
+                # }
+                task_kwargs=None
             )
 
             sample_list.append(sample)
@@ -140,14 +152,12 @@ def posterior_sample(cfg):
             original_path, 
             generated_path, 
             degraded_path, 
-            reference_path,
             samples_mean, 
             degraded_sample, 
-            x,
-            ref, 
+            x, 
             i, 
             len(audio_files), 
-            sr=16000,
+            sr=16000, 
         )
         del sample_list, samples_mean, samples_sum, x, degraded_sample
         torch.cuda.empty_cache()
@@ -160,12 +170,25 @@ def posterior_sample(cfg):
 def exists(path: str):
         return os.path.exists(path)
 
-def prepara_data(audio_files: List[str]):
-    filtered_audio_files = [[file for file in files if "mic1" in file] for files in audio_files]
-    # filtered_audio_files = [[file for file in files if file.endswith('wav')] for files in audio_files]
-    n_samples = min([len(files) for files in filtered_audio_files])
+def prepare_data(audio_files: List[str]):
+    pattern = re.compile(r"Sample_(\d+)_\d+\.wav")
+    file_path = glob.glob(os.path.join(audio_files, "Sample_*_*.wav"))
 
-    return {f"spk{i}": random.sample(files, k=n_samples)  for i, files in enumerate(filtered_audio_files)}
+    audio_dict = defaultdict(list)
+    for path in file_path:
+        match = pattern.search(path)
+        if match:
+            i = int(match.group(1))
+            audio_dict[i].append(path)
+
+    audio_dict = {k: sorted(v) for k, v in audio_dict.items() if len(v) == 2}  # filter out incomplete samples
+    return audio_dict
+# def prepara_data(audio_files: List[str]):
+#     filtered_audio_files = [[file for file in files if "mic1" in file] for files in audio_files]
+#     # filtered_audio_files = [[file for file in files if file.endswith('wav')] for files in audio_files]
+#     n_samples = min([len(files) for files in filtered_audio_files])
+
+#     return {f"spk{i}": random.sample(files, k=n_samples)  for i, files in enumerate(filtered_audio_files)}
 
 def prepare_audio_before_degradation(x: List[torch.Tensor]) -> torch.Tensor:
     min_sample_length = min(map(lambda tensor: tensor.size(-1), x))
@@ -184,7 +207,7 @@ def load_audio(
     x = torchaudio.functional.resample(x, sr, target_sample_rate)
     if segment_size is not None:
         x = cut_audio_segment(x, segment_size)
-    x = torchaudio.functional.vad(x, target_sample_rate)
+    # x = torchaudio.functional.vad(x, target_sample_rate)
     x = x.to(device).unsqueeze(0)
     return x
 
@@ -195,14 +218,16 @@ def save_audios(
     original_path: str,
     generated_path: str,
     degraded_path: str,
-    reference_path: str,
     pred_sample: torch.Tensor,
     degraded_sample: torch.Tensor,
     original_sample: torch.Tensor,
-    ref: torch.Tensor,
     idx: int,
     n_spk: int,
     sr: int,
+    # train_mean: float,
+    # train_std: float,
+    # input_mean: float,
+    # input_std: float,
 ):
     pred_chunked = torch.chunk(
         pred_sample, chunks=n_spk, dim=0 # dim=0 -> batch # modify
@@ -210,23 +235,20 @@ def save_audios(
     orig_chunked = torch.chunk(
         original_sample, chunks=n_spk, dim=0
     )  # explicit number of chunks 2
-    ref_chunked = torch.chunk(
-        ref, chunks=n_spk, dim=0
-    )  # explicit number of chunks 2
 
-    for i, (cur_pred, cur_orig, cur_ref) in enumerate(zip(pred_chunked, orig_chunked, ref_chunked)):
+    for i, (cur_pred, cur_orig) in enumerate(zip(pred_chunked, orig_chunked)):
+        # denormalize
+        # cur_pred = (cur_pred - train_mean) / (train_std + 1e-9)
+        # cur_pred = cur_pred * input_std[i].to('cpu') + input_mean[i].to('cpu')
 
         name = f"Sample_{idx}_{i + 1}.wav"
         torchaudio.save(
             os.path.join(generated_path, name), cur_pred.detach().cpu().view(1, -1), sr
         )
+        print(os.path.join(generated_path, name))
         torchaudio.save(
             os.path.join(original_path, name), cur_orig.detach().cpu().view(1, -1), sr
         )
-        torchaudio.save(
-            os.path.join(reference_path, name), cur_ref.detach().cpu().view(1, -1), sr
-        )
-        print(os.path.join(reference_path, name))
 
     # redefine name for degraded
     name = f"Sample_{idx}.wav"
@@ -235,7 +257,7 @@ def save_audios(
     )
 
 def degradation(x: torch.Tensor) -> torch.Tensor:
-    return torch.stack([s for s in torch.chunk(x, 4, dim=0)]).sum(0)
+    return torch.stack([s for s in torch.chunk(x, 2, dim=0)]).sum(0)
 
 def sisnr(x, y):
         alpha = (x * y).sum(-1, keepdims=True) / (

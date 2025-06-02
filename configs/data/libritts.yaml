@@ -1,12 +1,16 @@
 name: libritts
 
 root:
+  # - /home/public_datasets/LibriTTS_R/LibriTTS_R/test-clean/
+  # - /home/hualing/PnP-DM-public/results_libritts_720k_2spk_1/source_separation/original/
+  - /home/public_datasets/LibriTTS_R/LibriTTS_R/test-other/
   # 1
-  - /home/public_datasets/LibriTTS_R/LibriTTS_R/test-clean/1188/133604/
-  - /home/public_datasets/LibriTTS_R/LibriTTS_R/test-clean/4970/29093/
+  # - /home/public_datasets/LibriTTS_R/LibriTTS_R/test-clean/1188/133604/
+  # - /home/public_datasets/LibriTTS_R/LibriTTS_R/test-clean/4970/29093/
   # 2
   # - /home/public_datasets/LibriTTS_R/LibriTTS_R/test-clean/6829/68771/
   # - /home/public_datasets/LibriTTS_R/LibriTTS_R/test-clean/7176/92135/
   # 3
   # - /home/public_datasets/LibriTTS_R/LibriTTS_R/test-clean/237/134500/
   # - /home/public_datasets/LibriTTS_R/LibriTTS_R/test-clean/1320/122617/
+num_pairs: 250

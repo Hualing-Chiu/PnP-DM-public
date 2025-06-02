@@ -1,8 +1,6 @@
 operator:
   name: source_separation
-  channels: 1
-  # audio_dim: # need fill
-  # ratio: 2
+  channels: 2
 
 noise:
   name: gaussian

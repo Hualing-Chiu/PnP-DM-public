@@ -1,0 +1,8 @@
+SI-SNR Sample_0.wav: [[-6.202088]]
+SI-SNR Sample_1.wav: [[-33.15538]]
+SI-SNR Sample_2.wav: [[-34.91942]]
+SI-SNR Sample_3.wav: [[-13.286938]]
+SI-SNR Sample_4.wav: [[-5.5416784]]
+SI-SNR Sample_5.wav: [[-29.670498]]
+SI-SNR Sample_6.wav: [[-25.483343]]
+SI-SNR Sample_7.wav: [[-8.945102]]

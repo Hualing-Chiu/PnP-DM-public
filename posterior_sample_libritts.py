@@ -1,7 +1,8 @@
-import torch, os, hydra, logging, json
+import torch, os, hydra, logging
 import torchaudio
 import itertools
 import random
+import json
 import gc
 import numpy as np
 import matplotlib.pyplot as plt
@@ -38,12 +39,12 @@ def posterior_sample(cfg):
         hydra.utils.instantiate(task_config.metrics[metric], device=device)
         for metric in task_config.metrics
     ]
-    # print([type(m) for m in metrics_list])
     # source separation load data
     if task_config.operator.name == "source_separation":
-        audio_files = [list(map(lambda x: os.path.join(d, x), os.listdir(d))) for d in data_config.root] # List[str]
+        # audio_files = [list(map(lambda x: os.path.join(d, x), os.listdir(d))) for d in data_config.root] # List[str]
+        mix_pairs = prepare_random_pairs(data_config.root[0], data_config.num_pairs)
 
-    files_dict = prepara_data(audio_files) 
+    # files_dict = prepara_data(audio_files) 
 
     model = get_model(model_config.name, **model_config.model)
     # load checkpoint
@@ -62,7 +63,7 @@ def posterior_sample(cfg):
     sampler = get_sampler(sampler_config, model=model, diffusion=diffusion, degradation=degradation, operator=operator, noiser=noiser, device=device)
 
     # inference
-    output_dir = os.path.join("test", task_config.operator.name) # results_vctk_820k_finetune_grad_spk_condition
+    output_dir = os.path.join("results_libritts_720k_grad_3_spk_condition", task_config.operator.name) # results_vctk_820k_finetune_grad_spk_condition
     generated_path = os.path.join(output_dir, "generated")
     original_path = os.path.join(output_dir, "original")
     degraded_path = os.path.join(output_dir, "degraded")
@@ -74,18 +75,36 @@ def posterior_sample(cfg):
     # inference
     generated_samples = []
     real_samples = []
-    files_key = list(files_dict.keys()) # [spk0, spk1, ...]
+    # files_key = list(files_dict.keys()) # [spk0, spk1, ...]
 
-    for i, f in enumerate(zip(*files_dict.values())):
-        # if i > 10: break
+    # for i, f in enumerate(zip(*files_dict.values())):
+    for i, f in enumerate(mix_pairs):
         ref_samples= []
         x = load_audios(f, 16000, None, "cpu")
         x = prepare_audio_before_degradation(x)
         degraded_sample = degradation(x).cpu() # y_n
 
         # ref & mask_ref
-        for j, k in enumerate(files_key):
-            candidate = [file for file in files_dict[k] if file not in f[j]]
+        # for j, k in enumerate(files_key):
+        #     candidate = [file for file in files_dict[k] if file not in f[j]]
+        #     ref_samples.append(random.choice(candidate))
+        
+        for _f in f:
+            chapter_dir = os.path.dirname(_f)
+            speaker_dir = os.path.dirname(chapter_dir)
+            candidate = [os.path.join(chapter_dir, k) for k in os.listdir(chapter_dir) 
+                         if k.endswith('.wav') and os.path.join(chapter_dir, k) != _f]
+            
+            if not candidate:
+                print(f"[Warning] No reference candidates found for: {_f}")
+                for chapter in os.listdir(speaker_dir):
+                    chapter_path = os.path.join(speaker_dir, chapter)
+                    if chapter_path == chapter_dir or not os.path.isdir(chapter_path):
+                        continue
+                    for wav in os.listdir(chapter_path):
+                        if wav.endswith('.wav'):
+                            candidate.append(os.path.join(chapter_path, wav))
+
             ref_samples.append(random.choice(candidate))
 
         ref = load_audios(ref_samples, 16000, None, "cpu")
@@ -104,6 +123,7 @@ def posterior_sample(cfg):
                     "ref": ref.to(device),
                     "mask_ref": mask_ref.to(device),
                 }
+                # task_kwargs=None
             )
 
             sample_list.append(sample)
@@ -143,11 +163,11 @@ def posterior_sample(cfg):
             reference_path,
             samples_mean, 
             degraded_sample, 
-            x,
-            ref, 
-            i, 
-            len(audio_files), 
-            sr=16000,
+            x, 
+            ref,
+            i+250, 
+            len(f), 
+            sr=16000, 
         )
         del sample_list, samples_mean, samples_sum, x, degraded_sample
         torch.cuda.empty_cache()
@@ -160,12 +180,46 @@ def posterior_sample(cfg):
 def exists(path: str):
         return os.path.exists(path)
 
-def prepara_data(audio_files: List[str]):
-    filtered_audio_files = [[file for file in files if "mic1" in file] for files in audio_files]
-    # filtered_audio_files = [[file for file in files if file.endswith('wav')] for files in audio_files]
-    n_samples = min([len(files) for files in filtered_audio_files])
+def prepare_random_pairs(root_dir: str, num_pairs: int) -> List[Tuple[str, str]]:
+    """
+    從 LibriTTS-R 路徑中隨機產生 num_pairs 組 2-mix 路徑對 (spk1_wav, spk2_wav)
+    """
+    speaker_dirs = [os.path.join(root_dir, spk) for spk in os.listdir(root_dir)
+                    if os.path.isdir(os.path.join(root_dir, spk))]
+    
+    speaker_files = {}
+    for spk_dir in speaker_dirs:
+        all_wavs = []
+        for chapter in os.listdir(spk_dir):
+            chapter_path = os.path.join(spk_dir, chapter)
+            if os.path.isdir(chapter_path):
+                all_wavs.extend([os.path.join(chapter_path, wav) for wav in os.listdir(chapter_path) if wav.endswith('.wav')])
 
-    return {f"spk{i}": random.sample(files, k=n_samples)  for i, files in enumerate(filtered_audio_files)}
+        if len(all_wavs) > 1:
+            speaker_files[spk_dir] = all_wavs
+
+    all_speakers = list(speaker_files.keys())
+    random.shuffle(all_speakers)
+    mix_pairs = []
+        
+    i = 0
+    while i + 2 < len(all_speakers) and len(mix_pairs) < num_pairs:
+        spk1, spk2, spk3 = all_speakers[i:i+3]
+        # spk2 = all_speakers[i + 1]
+        wav1 = speaker_files[spk1]
+        wav2 = speaker_files[spk2]
+        wav3 = speaker_files[spk3]
+        min_len = min(len(wav1), len(wav2), len(wav3))
+        random.shuffle(wav1)
+        random.shuffle(wav2)
+        random.shuffle(wav3)
+        for j in range(min_len):
+            mix_pairs.append((wav1[j], wav2[j], wav3[j]))
+            if len(mix_pairs) >= num_pairs:
+                break
+        i += 3  # 每次取兩個說話者
+
+    return mix_pairs
 
 def prepare_audio_before_degradation(x: List[torch.Tensor]) -> torch.Tensor:
     min_sample_length = min(map(lambda tensor: tensor.size(-1), x))
@@ -184,7 +238,7 @@ def load_audio(
     x = torchaudio.functional.resample(x, sr, target_sample_rate)
     if segment_size is not None:
         x = cut_audio_segment(x, segment_size)
-    x = torchaudio.functional.vad(x, target_sample_rate)
+    # x = torchaudio.functional.vad(x, target_sample_rate)
     x = x.to(device).unsqueeze(0)
     return x
 
@@ -195,7 +249,7 @@ def save_audios(
     original_path: str,
     generated_path: str,
     degraded_path: str,
-    reference_path: str,
+    ref_path: str,
     pred_sample: torch.Tensor,
     degraded_sample: torch.Tensor,
     original_sample: torch.Tensor,
@@ -215,6 +269,9 @@ def save_audios(
     )  # explicit number of chunks 2
 
     for i, (cur_pred, cur_orig, cur_ref) in enumerate(zip(pred_chunked, orig_chunked, ref_chunked)):
+        # denormalize
+        # cur_pred = (cur_pred - train_mean) / (train_std + 1e-9)
+        # cur_pred = cur_pred * input_std[i].to('cpu') + input_mean[i].to('cpu')
 
         name = f"Sample_{idx}_{i + 1}.wav"
         torchaudio.save(
@@ -224,9 +281,9 @@ def save_audios(
             os.path.join(original_path, name), cur_orig.detach().cpu().view(1, -1), sr
         )
         torchaudio.save(
-            os.path.join(reference_path, name), cur_ref.detach().cpu().view(1, -1), sr
+            os.path.join(ref_path, name), cur_ref.detach().cpu().view(1, -1), sr
         )
-        print(os.path.join(reference_path, name))
+        print(os.path.join(ref_path, name))
 
     # redefine name for degraded
     name = f"Sample_{idx}.wav"
@@ -235,7 +292,7 @@ def save_audios(
     )
 
 def degradation(x: torch.Tensor) -> torch.Tensor:
-    return torch.stack([s for s in torch.chunk(x, 4, dim=0)]).sum(0)
+    return torch.stack([s for s in torch.chunk(x, 3, dim=0)]).sum(0)
 
 def sisnr(x, y):
         alpha = (x * y).sum(-1, keepdims=True) / (

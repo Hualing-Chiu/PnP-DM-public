@@ -3,5 +3,7 @@ name: librispeech
 root:
   # - /media/ext_ssd/public_datasets/LibriMix/2speakers/LibriSpeech/test-clean/1188/133604/
   # - /media/ext_ssd/public_datasets/LibriMix/2speakers/LibriSpeech/test-clean/4970/29093/
-  - /media/ext_ssd/public_datasets/LibriMix/2speakers/wav16k/min/test/s1
-  - /media/ext_ssd/public_datasets/LibriMix/2speakers/wav16k/min/test/s2
+  # - /home/public_datasets/LibriMix-wav16/s1
+  # - /home/public_datasets/LibriMix-wav16/s2
+  - /home/public_datasets/LibriSpeech/train-clean-100/1363/139304/
+  - /home/public_datasets/LibriSpeech/train-clean-100/2007/132570/

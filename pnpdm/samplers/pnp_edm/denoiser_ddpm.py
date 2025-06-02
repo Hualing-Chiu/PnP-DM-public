@@ -488,33 +488,6 @@ class GaussianDiffusion:
             final = sample
             break
 
-        # embedding
-        # x_0 = final["pred_xstart"]
-        # x_0.requires_grad_(True)
-        # r_embedding = F.normalize(task_kwargs['r_e'])
-        # embedding = F.normalize(classifier.encode_batch(x_0.squeeze(1)))
-        # n_spk = x_0.shape[0]
-        # loss = 0
-        # for i in range(n_spk):
-        #     e = embedding[i * y.size(0):(i + 1) * y.size(0), ...]
-        #     r_e = r_embedding[i * y.size(0):(i + 1) * y.size(0), ...]
-        #     loss += F.cosine_similarity(e, r_e, dim=-1).mean()
-
-        #     for j in range(i + 1, n_spk):
-        #         temp_e = embedding[j * y.size(0):(j + 1) * y.size(0), ...]
-        #         loss += -F.cosine_similarity(e, temp_e, dim=-1).mean()
-
-        # condition = th.autograd.grad(
-        #     outputs=loss, inputs=x_0, retain_graph=True)[0]
-        
-        # normguide1 = th.linalg.norm(condition) / x_0.size(-1) ** 0.5
-        # alphas = th.from_numpy(self.alphas).to(device)
-        # sigma = th.sqrt(alphas[start])
-        # s1 = 0.01 / (normguide1 * sigma + 1e-6)
-        # # x_0 = x_0 + (th.vmap(lambda a,b: a*b)(s1, condition) * 0.5).detach()
-        # x_0 = x_0 + (s1 * condition * 0.5).detach()
-
-        # return x_0
         return final["pred_xstart"]
 
     def p_sample_loop_progressive(
