@@ -62,7 +62,7 @@ def posterior_sample(cfg):
     sampler = get_sampler(sampler_config, model=model, diffusion=diffusion, degradation=degradation, operator=operator, noiser=noiser, device=device)
 
     # inference
-    output_dir = os.path.join("batch", task_config.operator.name) # results_vctk_820k_finetune_grad_spk_condition
+    output_dir = os.path.join("batch_3spk", task_config.operator.name) # results_vctk_820k_finetune_grad_spk_condition
     generated_path = os.path.join(output_dir, "generated")
     original_path = os.path.join(output_dir, "original")
     degraded_path = os.path.join(output_dir, "degraded")
@@ -137,7 +137,6 @@ def posterior_sample(cfg):
         n_spk = int(x_batch.shape[0] / batch_size)
         base_sample = sample_list[0]
         for b in range(len(batch_group)):
-            print(b, n_spk)
             base = base_sample[b * n_spk:(b + 1) * n_spk]
             summed = base.clone()
             for j in range(1, len(sample_list)):
@@ -255,7 +254,11 @@ def save_audios(
     )
 
 def degradation(x: torch.Tensor) -> torch.Tensor:
-    return torch.stack([s for s in torch.chunk(x, 2, dim=0)]).sum(0)
+    n_spk = 3  # number of speakers, modify as needed
+    B = x.shape[0] // n_spk
+    x_grouped = x.view(B, n_spk, *x.shape[1:])  # [B, n_spk, C, T]
+    return x_grouped.sum(dim=1)  # sum over speakers
+    # return torch.stack([s for s in torch.chunk(x, 2, dim=0)]).sum(0)
 
 def truncate_to_min_len(x: List[torch.Tensor]) -> torch.Tensor:
     min_len = min(t.size(-1) for t in x)
