@@ -10,7 +10,7 @@ import torchaudio
 # from inference_utils import calculate_all_metrics, log_results
 import logging
 
-logging.basicConfig(filename='/home/hualing/PnP-DM-public/batch/source_separation/each_sisnr.txt', level=logging.INFO, format='%(message)s')
+logging.basicConfig(filename='/home/hualing/PnP-DM-public/results_vctk_new_model_2_spk_all/source_separation/each_sisnr.txt', level=logging.INFO, format='%(message)s')
 
 def SiSNR(real_samples, samples):
     alpha = (samples * real_samples).sum(-1, keepdims=True) / (
@@ -25,9 +25,9 @@ def SiSNR(real_samples, samples):
 
 
 if __name__=="__main__":
-    original_path = "/home/hualing/PnP-DM-public/batch/source_separation/original"
-    degraded_path = "/media/md01/home/hualing/PnP-DM-public/results_libritts_720k_3_spk/source_separation/degraded"
-    generated_path = "/home/hualing/PnP-DM-public/batch/source_separation/generated"
+    original_path = "/home/hualing/PnP-DM-public/results_vctk_new_model_2_spk_all/source_separation/original"
+    degraded_path = "/home/hualing/PnP-DM-public/results_libritts_new_model_2_spk_no_spk_condition/source_separation/degraded/"
+    generated_path = "/home/hualing/PnP-DM-public/results_vctk_new_model_2_spk_all/source_separation/generated"
     # diarization_path = "/home/hualing/Undiff/results_new_sampling/source_separation_inference/diarization"
     
     all_sisnr = []
