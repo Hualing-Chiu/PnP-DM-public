@@ -1,2 +1,0 @@
-SiSNR/mean: nan
-SiSNR/std: nan
