@@ -5,5 +5,7 @@ root:
   # - /media/ext_ssd/public_datasets/LibriMix/2speakers/LibriSpeech/test-clean/4970/29093/
   # - /home/public_datasets/LibriMix-wav16/s1
   # - /home/public_datasets/LibriMix-wav16/s2
-  - /home/public_datasets/LibriSpeech/train-clean-100/1363/139304/
-  - /home/public_datasets/LibriSpeech/train-clean-100/2007/132570/
+  # - /home/public_datasets/LibriSpeech/LibriSpeech/test-clean/
+  - /home/public_datasets/LibriSpeech/LibriSpeech/test-other/
+
+num_pairs: 250

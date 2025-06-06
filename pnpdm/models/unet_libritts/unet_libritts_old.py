@@ -27,6 +27,8 @@ from .func_util import exists, unwrap
 from typing import Optional, Union
 
 
+__all__ = ["UNetModel"]
+
 class AttentionPool2d(nn.Module):
     """
     Adapted from CLIP: https://github.com/openai/CLIP/blob/main/clip/model.py
@@ -278,10 +280,8 @@ class AttentionBlock(nn.Module):
         num_heads=1,
         num_head_channels=-1,
         use_checkpoint=False,
-        len_factor=128,
     ):
         super().__init__()
-        self.len_factor = len_factor
         self.channels = channels
         if num_head_channels == -1:
             self.num_heads = num_heads
@@ -294,7 +294,7 @@ class AttentionBlock(nn.Module):
         self.norm = normalization(channels)
         self.qkv = conv_nd(1, channels, channels * 3, 1)
 
-        self.attention = QKVAttention(self.num_heads, len_factor=len_factor)
+        self.attention = QKVAttention(self.num_heads)
 
         self.proj_out = zero_module(conv_nd(1, channels*2, channels, 1))
 
@@ -307,8 +307,8 @@ class AttentionBlock(nn.Module):
         qkv = self.qkv(self.norm(x))
         # qkv = th.chunk(qkv, 2, 1)
         h = th.cat([self.attention(qkv, True),
-                    th.flip(self.attention(th.flip(qkv, (2,)), True), (2,))],
-                    # self.attention(qkv)],
+                    # th.flip(self.attention(th.flip(qkv, (2,)), True), (2,))],
+                    self.attention(qkv)],
                     1)
         h = self.proj_out(h)
         return (x + h).reshape(b, c, *spatial)
@@ -339,10 +339,9 @@ class QKVAttention(nn.Module):
     A module which performs QKV attention. Matches legacy QKVAttention + input/ouput heads shaping
     """
 
-    def __init__(self, n_heads, len_factor=128):
+    def __init__(self, n_heads):
         super().__init__()
         self.n_heads = n_heads
-        self.len_factor = len_factor
 
     def forward(self, qkv, is_causal=False):
         """
@@ -357,9 +356,9 @@ class QKVAttention(nn.Module):
         q, k, v = rearrange(qkv.half(), 'b (h c) t -> b h t c', h=self.n_heads).split(ch, dim=-1)
 
         if is_causal:
-            len_scale = th.log(th.arange(length, device=qkv.device, dtype=q.dtype) + 1.).reshape(1, 1, -1, 1) / math.log(self.len_factor)
+            len_scale = th.log(th.arange(length, device=qkv.device, dtype=q.dtype) + 1.).reshape(1, 1, -1, 1) / math.log(128)
         else:
-            len_scale = math.log(length) / math.log(self.len_factor)
+            len_scale = math.log(length) / math.log(128)
 
         with sdpa_kernel(SDPBackend.FLASH_ATTENTION):
             a = F.scaled_dot_product_attention((q*len_scale).contiguous(), k.contiguous(), v.contiguous(), is_causal=is_causal)
@@ -422,9 +421,6 @@ class UNetModel(nn.Module):
         num_heads_upsample=-1,
         use_scale_shift_norm=False,
         resblock_updown=False,
-        spk_enc: str = "facebook/wav2vec2-base",
-        spk_enc_layers: int = 2,
-        spk_dim: int = 512,
     ):
         super().__init__()
 
@@ -454,9 +450,9 @@ class UNetModel(nn.Module):
             linear(time_embed_dim, time_embed_dim),
         )
 
-        self.non_spk_emb = nn.Parameter(th.randn(spk_dim))
-        self.spk_encoder = Speech2Vector(spk_enc_layers, spk_dim, enc_name=spk_enc)
-        time_embed_dim = time_embed_dim + spk_dim
+        self.non_spk_emb = nn.Parameter(th.randn(512))
+        self.spk_encoder = Speech2Vector(2, 512)
+        time_embed_dim = time_embed_dim + 512
 
         if self.num_classes is not None:
             self.label_emb = nn.Embedding(self.num_classes, time_embed_dim)
@@ -489,7 +485,6 @@ class UNetModel(nn.Module):
                             use_checkpoint=use_checkpoint,
                             num_heads=num_heads,
                             num_head_channels=num_head_channels,
-                            len_factor=image_size//ds,
                         )
                     )
                 self.input_blocks.append(TimestepEmbedSequential(*enc_layers))
@@ -642,12 +637,9 @@ class UNetModel(nn.Module):
         spk_emb = self.non_spk_emb.repeat(N, 1)
         if exists(ref) and exists(mask_ref):
             # spk_emb = self.spk_encoder(ref, mask_ref.bool())
-            alpha = mask_ref.all(-1, keepdim=True).float()
-            spk_emb = alpha * spk_emb + (1-alpha) * self.spk_encoder(ref, mask_ref.bool())
-
-            # spk_emb = th.vmap(th.where)(mask_ref.all(-1),
-            #                             spk_emb,
-            #                             self.spk_encoder(ref, mask_ref.bool()),)
+            spk_emb = th.vmap(th.where)(mask_ref.all(-1),
+                                        spk_emb,
+                                        self.spk_encoder(ref, mask_ref.bool()),)
         emb = th.cat([emb, spk_emb], dim=-1)
 
         if self.num_classes is not None:
@@ -674,9 +666,9 @@ class w2v2(nn.Module): #Small Wrapper
         self._get_feature_vector_attention_mask = m._get_feature_vector_attention_mask
 
 class Speech2Vector(nn.Module):
-    def __init__(self, enc_layers: int, out_features: int, enc_name: str = "facebook/wav2vec2-base"):
+    def __init__(self, enc_layers: int, out_features):
         super().__init__()
-        model = self.get_model(enc_name)
+        model = self.get_model()
         model.encoder.layers = model.encoder.layers[:enc_layers]
         self.feature_extractor = model.feature_extractor
         self.feature_projection = model.feature_projection
@@ -684,8 +676,8 @@ class Speech2Vector(nn.Module):
         self._get_feature_vector_attention_mask = model._get_feature_vector_attention_mask
         self.linear = nn.Linear(model.config.hidden_size, out_features)
 
-    def get_model(self, enc_name: str):
-        model = Wav2Vec2Model.from_pretrained(enc_name)
+    def get_model(self):
+        model = Wav2Vec2Model.from_pretrained("facebook/wav2vec2-base")
         #Simple trick to crop the layers for fine-tuning
         model.feature_extractor.gradient_checkpointing = False
         model.encoder.gradient_checkpointing = False
@@ -730,14 +722,7 @@ class Speech2Vector(nn.Module):
         dur (tensor): duration embedding (batch, hp.feature_size)
         vp (tensor): voiced embedding (batch, hp.feature_size)
         """
-        if mask is None:
-            x = th.vmap(lambda v: (v - v.mean())/v.std().clamp_min(1e-6))(x)  # normalize each sample
-        else:
-            n = (~mask).float().sum(1, keepdim=True)
-            n[n==0] = x.shape[1]
-            x_mu = (x * (~mask).float()).sum(1, keepdim=True)/n  # mean of non-masked values
-            x_std = ((x * (~mask).float()).pow(2).sum(1, keepdim=True)/n - x_mu.pow(2)).sqrt()
-            x = ((x - x_mu) / x_std.clamp_min(1e-6)) * (~mask).float()  
+
         x, mask = self.step(x, mask)    # feature extraction via w2v2's CNN model
         # pass through attribute encoders
         spk = self.process(x, mask, self.encoder, self.linear) # a_s

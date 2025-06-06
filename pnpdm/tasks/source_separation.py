@@ -63,11 +63,36 @@ class SourceSeparation(NonLinearOperator):
         # return z.float()
         return z.view(batch_size * n_spk, C, T).float()  # (B * n_spk, C, T)
 
-    # def compute_ortho_loss(self, z_):
-    #     z_norm = F.normalize(z_, p=2, dim=-1)
-    #     cos_matrix = torch.matmul(z_norm, z_norm.T) # z_norm @ z_norm^T
-    #     return (cos_matrix.abs().sum() - z_.shape[0]) / (z_.shape[0] * (z_.shape[0] - 1))
-        
+    # def proximal_generator(self, x, y, diffusion, i, sigma, rho, gamma=1e-4):
+    #     x = x.to(self.device)
+    #     y = y.to(self.device)
+    #     z = x.clone().detach()
+    #     n_spk = z.shape[0]
+    #     t = torch.tensor([i] * z.shape[0], device=self.device)
+
+    #     z.requires_grad_(True)
+    #     for _ in range(3):
+    #         embedding = classifier.encode_batch(z.squeeze(1).to(self.device))
+    #         ortho_loss = self.compute_ortho_loss(embedding.squeeze(1))
+    #         adaptive_rho = self.compute_adaptive_rho(rho, i, ortho_loss.detach())
+    #         grad = torch.autograd.grad(ortho_loss, z, retain_graph=True)[0].detach()
+    #         z = z - (adaptive_rho * gamma) * grad
+
+    #         log_p_y_x = (y - (
+    #             torch.stack(torch.chunk(z, n_spk, 0)).sum(0)
+    #         ))
+    #         log_p_y_x = repeat(log_p_y_x, "h ... -> (r h) ...", r=n_spk) / n_spk
+    #         z = z + log_p_y_x
+
+    #     # z = z - (rho * gamma) * grad - (gamma / rho**2) * (z - x)
+    #     # z = z - (adaptive_rho * gamma) * grad - (gamma / rho**2) * (z - x)
+    #     z = z - (gamma / rho**2) * (z - x)
+    #     # print(f"rho: {rho}")
+    #     if t[0] != 0:
+    #         z = diffusion.q_sample(z, t)   
+
+    #     return z.float()
+    
     def compute_ortho_loss(self, z_):
         """
         根據論文公式 ||V^T V - I||_F^2 實作 z_ 為 [B, D] 的嵌入矩陣。

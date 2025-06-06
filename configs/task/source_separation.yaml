@@ -1,6 +1,6 @@
 operator:
   name: source_separation
-  channels: 3
+  channels: 2
 
 noise:
   name: gaussian

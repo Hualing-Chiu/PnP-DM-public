@@ -43,7 +43,7 @@ def posterior_sample(cfg):
     if task_config.operator.name == "source_separation":
         audio_files = [list(map(lambda x: os.path.join(d, x), os.listdir(d))) for d in data_config.root] # List[str]
 
-    files_dict = prepara_data(audio_files) 
+    files_dict = prepare_data(audio_files) 
 
     model = get_model(model_config.name, **model_config.model)
     # load checkpoint
@@ -62,7 +62,7 @@ def posterior_sample(cfg):
     sampler = get_sampler(sampler_config, model=model, diffusion=diffusion, degradation=degradation, operator=operator, noiser=noiser, device=device)
 
     # inference
-    output_dir = os.path.join("test", task_config.operator.name) # results_vctk_820k_finetune_grad_spk_condition
+    output_dir = os.path.join("new_model_vctk_2spk", task_config.operator.name) # results_vctk_820k_finetune_grad_spk_condition
     generated_path = os.path.join(output_dir, "generated")
     original_path = os.path.join(output_dir, "original")
     degraded_path = os.path.join(output_dir, "degraded")
@@ -79,7 +79,7 @@ def posterior_sample(cfg):
     for i, f in enumerate(zip(*files_dict.values())):
         # if i > 10: break
         ref_samples= []
-        x = load_audios(f, 16000, None, "cpu")
+        x = load_audios(f, 16000, None, "cpu", False)
         x = prepare_audio_before_degradation(x)
         degraded_sample = degradation(x).cpu() # y_n
 
@@ -88,7 +88,7 @@ def posterior_sample(cfg):
             candidate = [file for file in files_dict[k] if file not in f[j]]
             ref_samples.append(random.choice(candidate))
 
-        ref = load_audios(ref_samples, 16000, None, "cpu")
+        ref = load_audios(ref_samples, 16000, None, "cpu", True)
         ref = prepare_audio_before_degradation(ref).squeeze(1) # [2 ,1 ,T]
         mask_ref = torch.zeros_like(ref).to(torch.bool)
 
@@ -160,7 +160,7 @@ def posterior_sample(cfg):
 def exists(path: str):
         return os.path.exists(path)
 
-def prepara_data(audio_files: List[str]):
+def prepare_data(audio_files: List[str]):
     filtered_audio_files = [[file for file in files if "mic1" in file] for files in audio_files]
     # filtered_audio_files = [[file for file in files if file.endswith('wav')] for files in audio_files]
     n_samples = min([len(files) for files in filtered_audio_files])
@@ -177,7 +177,8 @@ def load_audio(
     path: str,
     target_sample_rate: int = 16000,
     segment_size: Optional[int] = None,
-    device: str = 'cpu'
+    device: str = 'cpu',
+    is_ref: bool = False
 ) -> torch.Tensor:
     print(path)
     x, sr = torchaudio.load(path)
@@ -185,9 +186,13 @@ def load_audio(
     if segment_size is not None:
         x = cut_audio_segment(x, segment_size)
     x = torchaudio.functional.vad(x, target_sample_rate)
+    if is_ref:
+        x = (x - x.mean()) / x.std() * 1
+    else:
+        x = (x - x.mean()) / x.std() * 0.2
     x = x.to(device).unsqueeze(0)
     return x
-
+    
 def load_audios(paths: List[str], *args, **kwargs) -> List[torch.Tensor]:
     return [load_audio(p, *args, **kwargs) for p in paths]
 
@@ -235,7 +240,7 @@ def save_audios(
     )
 
 def degradation(x: torch.Tensor) -> torch.Tensor:
-    return torch.stack([s for s in torch.chunk(x, 4, dim=0)]).sum(0)
+    return torch.stack([s for s in torch.chunk(x, 2, dim=0)]).sum(0)
 
 def sisnr(x, y):
         alpha = (x * y).sum(-1, keepdims=True) / (
