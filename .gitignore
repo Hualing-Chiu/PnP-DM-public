@@ -6,7 +6,9 @@ outputs/
 *.png
 taming/
 results*
+batch*
 *.pyc
 *.wav
 weights
 *.pt
+test_sisnr.py
