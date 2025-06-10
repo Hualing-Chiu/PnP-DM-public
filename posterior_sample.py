@@ -62,7 +62,7 @@ def posterior_sample(cfg):
     sampler = get_sampler(sampler_config, model=model, diffusion=diffusion, degradation=degradation, operator=operator, noiser=noiser, device=device)
 
     # inference
-    output_dir = os.path.join("new_model_vctk_2spk", task_config.operator.name) # results_vctk_820k_finetune_grad_spk_condition
+    output_dir = os.path.join("results_vctk_new_model_2spk_all", task_config.operator.name) # results_vctk_820k_finetune_grad_spk_condition
     generated_path = os.path.join(output_dir, "generated")
     original_path = os.path.join(output_dir, "original")
     degraded_path = os.path.join(output_dir, "degraded")
@@ -96,14 +96,15 @@ def posterior_sample(cfg):
         sample_list = []
         for _ in tqdm(range(cfg.num_runs)): # num_runs = 1
             sample = sampler(
-                g_x=x,
-                y_n=degraded_sample,
+                g_x=x.to(device),
+                y_n=degraded_sample.to(device),
                 record=cfg.record,
                 save_root=generated_path,
                 task_kwargs= {
                     "ref": ref.to(device),
                     "mask_ref": mask_ref.to(device),
                 }
+                # task_kwargs=None
             )
 
             sample_list.append(sample)
@@ -145,7 +146,7 @@ def posterior_sample(cfg):
             degraded_sample, 
             x,
             ref, 
-            i, 
+            i+735, 
             len(audio_files), 
             sr=16000,
         )
@@ -161,7 +162,7 @@ def exists(path: str):
         return os.path.exists(path)
 
 def prepare_data(audio_files: List[str]):
-    filtered_audio_files = [[file for file in files if "mic1" in file] for files in audio_files]
+    filtered_audio_files = [[file for file in files if "mic2" in file] for files in audio_files]
     # filtered_audio_files = [[file for file in files if file.endswith('wav')] for files in audio_files]
     n_samples = min([len(files) for files in filtered_audio_files])
 
@@ -185,7 +186,7 @@ def load_audio(
     x = torchaudio.functional.resample(x, sr, target_sample_rate)
     if segment_size is not None:
         x = cut_audio_segment(x, segment_size)
-    x = torchaudio.functional.vad(x, target_sample_rate)
+    # x = torchaudio.functional.vad(x, target_sample_rate)
     if is_ref:
         x = (x - x.mean()) / x.std() * 1
     else:

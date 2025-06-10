@@ -63,7 +63,7 @@ def posterior_sample(cfg):
     sampler = get_sampler(sampler_config, model=model, diffusion=diffusion, degradation=degradation, operator=operator, noiser=noiser, device=device)
 
     # inference
-    output_dir = os.path.join("results_libritts_new_model_2_spk_all", task_config.operator.name) # results_vctk_820k_finetune_grad_spk_condition
+    output_dir = os.path.join("results_libritts_new_model_2_spk_all_new", task_config.operator.name) # results_vctk_820k_finetune_grad_spk_condition
     generated_path = os.path.join(output_dir, "generated")
     original_path = os.path.join(output_dir, "original")
     degraded_path = os.path.join(output_dir, "degraded")
@@ -81,6 +81,7 @@ def posterior_sample(cfg):
             batch_size = len(mix_pairs) - b
 
         batch_group = mix_pairs[b:b + batch_size]
+
         x_batch = [load_audios(f, 16000, None, "cpu", False) for f in batch_group]
         x_batch = [prepare_audio_before_degradation(x) for x in x_batch]
         min_len = min(x.shape[-1] for x in x_batch)
@@ -170,7 +171,7 @@ def posterior_sample(cfg):
                 degraded_batch[i], 
                 x_batch[i * n_spk:(i + 1) * n_spk], 
                 ref_batch[i * n_spk:(i + 1) * n_spk],
-                b + i + 500, 
+                b + i, 
                 n_spk, 
                 sr=16000, 
             )

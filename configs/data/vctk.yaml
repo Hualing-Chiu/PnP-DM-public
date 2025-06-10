@@ -1,9 +1,11 @@
 name: vctk
 
 root:
-  - /home/public_datasets/VCTK-Corpus-0.92/wav48_silence_trimmed/p226
+  - /home/hualing/PnP-DM-public/results_vctk_new_model_2spk_all/source_separation/original
+  - /home/hualing/PnP-DM-public/results_vctk_new_model_2spk_all/source_separation/reference
+  # - /home/public_datasets/VCTK-Corpus-0.92/wav48_silence_trimmed/p226
   # - /home/public_datasets/VCTK-Corpus-0.92/wav48_silence_trimmed/p227
-  - /home/public_datasets/VCTK-Corpus-0.92/wav48_silence_trimmed/p228
+  # - /home/public_datasets/VCTK-Corpus-0.92/wav48_silence_trimmed/p228
   # - /home/public_datasets/VCTK-Corpus-0.92/wav48_silence_trimmed/p229
   # - /home/public_datasets/VCTK-Corpus-0.92/wav48_silence_trimmed/p225
   # - /home/public_datasets/VCTK-Corpus-0.92/wav48_silence_trimmed/p230

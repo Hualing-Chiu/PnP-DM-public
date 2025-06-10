@@ -1,5 +1,5 @@
 gpu: 0
 add_exp_name: 
-num_runs: 1
-batch_size: 16
+num_runs: 10
+batch_size: 8
 record: false

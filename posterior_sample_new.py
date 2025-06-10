@@ -1,11 +1,9 @@
-import torch, os, hydra, logging
+import torch, os, hydra, logging, json
 import torchaudio
 import itertools
 import random
-import json
 import gc
-import re
-import glob
+import re, glob
 import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
@@ -43,12 +41,11 @@ def posterior_sample(cfg):
     ]
     # print([type(m) for m in metrics_list])
     # source separation load data
-    # if task_config.operator.name == "source_separation":
-    #     audio_files = [list(map(lambda x: os.path.join(d, x), os.listdir(d))) for d in data_config.root] # List[str]
-
-    # files_dict = prepara_data(audio_files) 
     if task_config.operator.name == "source_separation":
-        audio_files = prepare_data(data_config.root[0])  # List[List[str]]
+        # audio_files = [list(map(lambda x: os.path.join(d, x), os.listdir(d))) for d in data_config.root] # List[str]
+        audio_files = prepare_data(data_config.root[0]) # List[str] or str
+        ref_files = prepare_data(data_config.root[1]) # List[str] or str
+    # files_dict = prepare_data(audio_files) 
 
     model = get_model(model_config.name, **model_config.model)
     # load checkpoint
@@ -67,44 +64,45 @@ def posterior_sample(cfg):
     sampler = get_sampler(sampler_config, model=model, diffusion=diffusion, degradation=degradation, operator=operator, noiser=noiser, device=device)
 
     # inference
-    output_dir = os.path.join("results_libritts_new_model_2_spk_no_spk_condition", task_config.operator.name) # results_vctk_820k_finetune_grad_spk_condition
+    output_dir = os.path.join("test", task_config.operator.name) # results_vctk_820k_finetune_grad_spk_condition
     generated_path = os.path.join(output_dir, "generated")
     original_path = os.path.join(output_dir, "original")
     degraded_path = os.path.join(output_dir, "degraded")
-    for path in [generated_path, original_path, degraded_path]:
+    reference_path = os.path.join(output_dir, "reference")
+    for path in [generated_path, original_path, degraded_path, reference_path]:
         if not exists(path):
             os.makedirs(path)
  
-    audio_files = sorted(audio_files.items())
-    batch_size = cfg.batch_size
+    # audio_files = sorted(audio_files.items())
     # inference
     generated_samples = []
     real_samples = []
-    
-    for batch_start in range(0, len(audio_files), batch_size):
-        if batch_start + batch_size > len(audio_files):
-            batch_size = len(audio_files) - batch_start
+    # files_key = list(files_dict.keys()) # [spk0, spk1, ...]
 
-        batch_group = audio_files[batch_start:batch_start + batch_size]
-        x_batch = [load_audios(f, 16000, None, "cpu") for _, f in batch_group]
-        x_batch = [prepare_audio_before_degradation(x) for x in x_batch]
-        # min_len = min(x.shape[-1] for x in x_batch)
-        x_batch = torch.stack(x_batch).flatten(0, 1).to(device)
-        print(f"x_batch shape: {x_batch.shape}")
-        degraded_batch = degradation(x_batch).cpu()  # y_n
+    # for i, (idx, f) in enumerate(audio_files):
+    for (i, f), (j, r) in zip(sorted(audio_files.items()), sorted(ref_files.items())):
+        assert i == j, f"Index mismatch: {i} != {j}"
+        x = load_audios(f, 16000, None, "cpu", False)
+        x = prepare_audio_before_degradation(x)
+        degraded_sample = degradation(x).cpu() # y_n
 
+        ref = load_audios(r, 16000, None, "cpu", True)
+        ref = prepare_audio_before_degradation(ref).squeeze(1) # [2 ,1 ,T]
+        mask_ref = torch.zeros_like(ref).to(torch.bool)
+
+        # sampling
         sample_list = []
-        for _ in tqdm(range(cfg.num_runs)):
+        for _ in tqdm(range(cfg.num_runs)): # num_runs = 1
             sample = sampler(
-                g_x=x_batch,
-                y_n=degraded_batch,
+                g_x=x.to(device),
+                y_n=degraded_sample.to(device),
                 record=cfg.record,
                 save_root=generated_path,
-                # task_kwargs={
-                #     "ref": ref_batch,
-                #     "mask_ref": mask_ref_batch,
-                # }
-                task_kwargs=None
+                task_kwargs= {
+                    "ref": ref.to(device),
+                    "mask_ref": mask_ref.to(device),
+                }
+                # task_kwargs=None
             )
 
             sample_list.append(sample)
@@ -112,40 +110,45 @@ def posterior_sample(cfg):
             torch.cuda.empty_cache()
             gc.collect()
 
-        n_spk = int(x_batch.shape[0] / batch_size)
-        base_sample = sample_list[0]
-        for b in range(len(batch_group)):
-            base = base_sample[b * n_spk:(b + 1) * n_spk]
-            summed = base.clone()
-            for j in range(1, len(sample_list)):
-                current = sample_list[j][b * n_spk:(b + 1) * n_spk]
-                best_score = float('-inf')
-                for perm in itertools.permutations(range(n_spk)):
-                    reordered = current[list(perm)]
-                    score = sum(sisnr(base[k], reordered[k]) for k in range(n_spk))
-                    if score > best_score:
-                        best_score = score
-                        best_perm = perm
-                current = current[list(best_perm)]
-                summed += current
-            avg = summed / cfg.num_runs
-            generated_samples.append(avg.cpu())
-            real_samples.append(x_batch[b * n_spk:(b + 1) * n_spk].cpu())  # speaker num
+        x = x.cpu()
+        real_samples.append(x)
+        n_spk = x.shape[0] # speaker num
+        samples_sum = sample_list[0].clone()
+        for j in range(1, len(sample_list)):
+            sample_next = sample_list[j]
+            base_sample = sample_list[0]
+            best_perm = None
+            best_score = float('-inf')
+            for perm in itertools.permutations(range(n_spk)):
+                reordered_sample = sample_next[list(perm)]
+                score = sum(sisnr(base_sample[k], reordered_sample[k]) for k in range(n_spk))
 
-            save_audios(
-                original_path,
-                generated_path,
-                degraded_path,
-                # reference_path,
-                avg,
-                degraded_batch[b],
-                x_batch[b * n_spk:(b + 1) * n_spk],
-                # ref_batch[b * n_spk:(b + 1) * n_spk],
-                batch_start + b,
-                n_spk,
-                16000
-            )
-        del sample_list, avg, summed, x_batch, degraded_batch
+                if score > best_score:
+                    best_score = score
+                    best_perm = perm
+
+            sample_next = sample_next[list(best_perm)]
+            samples_sum += sample_next
+            del sample_next
+            torch.cuda.empty_cache()
+            gc.collect()
+
+        samples_mean = samples_sum / cfg.num_runs
+        generated_samples.append(samples_mean)
+        save_audios(
+            original_path, 
+            generated_path, 
+            degraded_path, 
+            reference_path,
+            samples_mean, 
+            degraded_sample, 
+            x,
+            ref, 
+            i, 
+            len(audio_files), 
+            sr=16000,
+        )
+        del sample_list, samples_mean, samples_sum, x, degraded_sample
         torch.cuda.empty_cache()
 
     scores = calculate_all_metrics(
@@ -155,6 +158,13 @@ def posterior_sample(cfg):
 
 def exists(path: str):
         return os.path.exists(path)
+
+# def prepare_data(audio_files: List[str]):
+#     filtered_audio_files = [[file for file in files if "mic2" in file] for files in audio_files]
+#     # filtered_audio_files = [[file for file in files if file.endswith('wav')] for files in audio_files]
+#     n_samples = min([len(files) for files in filtered_audio_files])
+
+#     return {f"spk{i}": random.sample(files, k=n_samples)  for i, files in enumerate(filtered_audio_files)}
 
 def prepare_data(audio_files: List[str]):
     pattern = re.compile(r"Sample_(\d+)_\d+\.wav")
@@ -168,13 +178,8 @@ def prepare_data(audio_files: List[str]):
             audio_dict[i].append(path)
 
     audio_dict = {k: sorted(v) for k, v in audio_dict.items() if len(v) == 2}  # filter out incomplete samples
-    return audio_dict
-# def prepara_data(audio_files: List[str]):
-#     filtered_audio_files = [[file for file in files if "mic1" in file] for files in audio_files]
-#     # filtered_audio_files = [[file for file in files if file.endswith('wav')] for files in audio_files]
-#     n_samples = min([len(files) for files in filtered_audio_files])
-
-#     return {f"spk{i}": random.sample(files, k=n_samples)  for i, files in enumerate(filtered_audio_files)}
+    # print(audio_dict)
+    return audio_dict # {0: ['.../Sample_0_1.wav', '.../Sample_0_2.wav'], 1: []...}
 
 def prepare_audio_before_degradation(x: List[torch.Tensor]) -> torch.Tensor:
     min_sample_length = min(map(lambda tensor: tensor.size(-1), x))
@@ -186,7 +191,8 @@ def load_audio(
     path: str,
     target_sample_rate: int = 16000,
     segment_size: Optional[int] = None,
-    device: str = 'cpu'
+    device: str = 'cpu',
+    is_ref: bool = False
 ) -> torch.Tensor:
     print(path)
     x, sr = torchaudio.load(path)
@@ -194,9 +200,13 @@ def load_audio(
     if segment_size is not None:
         x = cut_audio_segment(x, segment_size)
     # x = torchaudio.functional.vad(x, target_sample_rate)
+    if is_ref:
+        x = (x - x.mean()) / x.std() * 1
+    else:
+        x = (x - x.mean()) / x.std() * 0.2
     x = x.to(device).unsqueeze(0)
     return x
-
+    
 def load_audios(paths: List[str], *args, **kwargs) -> List[torch.Tensor]:
     return [load_audio(p, *args, **kwargs) for p in paths]
 
@@ -204,16 +214,14 @@ def save_audios(
     original_path: str,
     generated_path: str,
     degraded_path: str,
+    reference_path: str,
     pred_sample: torch.Tensor,
     degraded_sample: torch.Tensor,
     original_sample: torch.Tensor,
+    ref: torch.Tensor,
     idx: int,
     n_spk: int,
     sr: int,
-    # train_mean: float,
-    # train_std: float,
-    # input_mean: float,
-    # input_std: float,
 ):
     pred_chunked = torch.chunk(
         pred_sample, chunks=n_spk, dim=0 # dim=0 -> batch # modify
@@ -221,20 +229,23 @@ def save_audios(
     orig_chunked = torch.chunk(
         original_sample, chunks=n_spk, dim=0
     )  # explicit number of chunks 2
+    ref_chunked = torch.chunk(
+        ref, chunks=n_spk, dim=0
+    )  # explicit number of chunks 2
 
-    for i, (cur_pred, cur_orig) in enumerate(zip(pred_chunked, orig_chunked)):
-        # denormalize
-        # cur_pred = (cur_pred - train_mean) / (train_std + 1e-9)
-        # cur_pred = cur_pred * input_std[i].to('cpu') + input_mean[i].to('cpu')
+    for i, (cur_pred, cur_orig, cur_ref) in enumerate(zip(pred_chunked, orig_chunked, ref_chunked)):
 
         name = f"Sample_{idx}_{i + 1}.wav"
         torchaudio.save(
             os.path.join(generated_path, name), cur_pred.detach().cpu().view(1, -1), sr
         )
-        print(os.path.join(generated_path, name))
         torchaudio.save(
             os.path.join(original_path, name), cur_orig.detach().cpu().view(1, -1), sr
         )
+        torchaudio.save(
+            os.path.join(reference_path, name), cur_ref.detach().cpu().view(1, -1), sr
+        )
+        print(os.path.join(reference_path, name))
 
     # redefine name for degraded
     name = f"Sample_{idx}.wav"
@@ -243,11 +254,7 @@ def save_audios(
     )
 
 def degradation(x: torch.Tensor) -> torch.Tensor:
-    n_spk = 2
-    B = x.shape[0] // n_spk
-    x_grouped = x.view(B, n_spk, *x.shape[1:])  # [B, n_spk, C, T]
-    return x_grouped.sum(dim=1)  # sum over speakers
-    # return torch.stack([s for s in torch.chunk(x, 2, dim=0)]).sum(0)
+    return torch.stack([s for s in torch.chunk(x, 2, dim=0)]).sum(0)
 
 def sisnr(x, y):
         alpha = (x * y).sum(-1, keepdims=True) / (

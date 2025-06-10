@@ -5,7 +5,7 @@ import numpy as np
 from einops import repeat
 from . import register_operator, LinearOperator, LinearSVDOperator, NonLinearOperator
 from speechbrain.inference.speaker import EncoderClassifier
-classifier = EncoderClassifier.from_hparams(source="speechbrain/spkrec-ecapa-voxceleb")
+classifier = EncoderClassifier.from_hparams(source="speechbrain/spkrec-ecapa-voxceleb", run_opts={"device": "cuda"})
 
 @register_operator(name='source_separation')
 class SourceSeparation(NonLinearOperator):
@@ -38,16 +38,11 @@ class SourceSeparation(NonLinearOperator):
             embedding = classifier.encode_batch(z_reshaped.to(self.device))
             embedding = embedding.view(batch_size, n_spk, -1)  # (B, n_spk, D)
             ortho_loss = self.compute_ortho_loss(embedding.squeeze(1))
-            ortho_loss = ortho_loss.mean()  # 平均化損失
+            # ortho_loss = ortho_loss.mean()  # 平均化損失
             adaptive_rho = self.compute_adaptive_rho(rho, i, ortho_loss.detach())
             grad = torch.autograd.grad(ortho_loss, z, retain_graph=True)[0].detach()
             z = z - (adaptive_rho * gamma) * grad
-            # print(adaptive_rho, adaptive_rho * gamma)
 
-            # log_p_y_x = (y - (
-            #     torch.stack(torch.chunk(z, n_spk, 0)).sum(0)
-            # ))
-            # log_p_y_x = repeat(log_p_y_x, "h ... -> (r h) ...", r=n_spk) / n_spk
             log_p_y_x = y - z.sum(dim=1)
             log_p_y_x = log_p_y_x.unsqueeze(1).repeat(1, n_spk, 1, 1) / n_spk
             z = z + log_p_y_x
@@ -59,8 +54,7 @@ class SourceSeparation(NonLinearOperator):
             z_flat = diffusion.q_sample(z_flat, t.repeat_interleave(n_spk))
             z = z_flat.view(batch_size, n_spk, C, T)
             # z = diffusion.q_sample(z, t)   
-
-        # return z.float()
+    
         return z.view(batch_size * n_spk, C, T).float()  # (B * n_spk, C, T)
 
     # def proximal_generator(self, x, y, diffusion, i, sigma, rho, gamma=1e-4):
@@ -70,9 +64,10 @@ class SourceSeparation(NonLinearOperator):
     #     n_spk = z.shape[0]
     #     t = torch.tensor([i] * z.shape[0], device=self.device)
 
+    #     # print(next(classifier.parameters()).device, z.device)
     #     z.requires_grad_(True)
     #     for _ in range(3):
-    #         embedding = classifier.encode_batch(z.squeeze(1).to(self.device))
+    #         embedding = classifier.encode_batch(z.squeeze(1))
     #         ortho_loss = self.compute_ortho_loss(embedding.squeeze(1))
     #         adaptive_rho = self.compute_adaptive_rho(rho, i, ortho_loss.detach())
     #         grad = torch.autograd.grad(ortho_loss, z, retain_graph=True)[0].detach()
