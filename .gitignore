@@ -11,4 +11,6 @@ batch*
 *.wav
 weights
 *.pt
-test_sisnr.py
+test*
+draw.py
+draw*

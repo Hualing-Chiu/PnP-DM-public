@@ -4,6 +4,7 @@ import itertools
 import random
 import json
 import gc
+import re, glob
 import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
@@ -63,7 +64,7 @@ def posterior_sample(cfg):
     sampler = get_sampler(sampler_config, model=model, diffusion=diffusion, degradation=degradation, operator=operator, noiser=noiser, device=device)
 
     # inference
-    output_dir = os.path.join("results_librispeech_new_model_4spk_all", task_config.operator.name) # results_vctk_820k_finetune_grad_spk_condition
+    output_dir = os.path.join("draw", task_config.operator.name) # results_vctk_820k_finetune_grad_spk_condition
     generated_path = os.path.join(output_dir, "generated")
     original_path = os.path.join(output_dir, "original")
     degraded_path = os.path.join(output_dir, "degraded")
@@ -180,48 +181,66 @@ def posterior_sample(cfg):
 def exists(path: str):
         return os.path.exists(path)
 
-def prepare_random_pairs(root_dir: str, num_pairs: int) -> List[Tuple[str, str, str,str]]:
-    """
-    從 LibriTTS-R 路徑中隨機產生 num_pairs 組 2-mix 路徑對 (spk1_wav, spk2_wav)
-    """
-    speaker_dirs = [os.path.join(root_dir, spk) for spk in os.listdir(root_dir)
-                    if os.path.isdir(os.path.join(root_dir, spk))]
+# def prepare_random_pairs(root_dir: str, num_pairs: int) -> List[Tuple[str, str, str]]:
+#     """
+#     從 LibriTTS-R 路徑中隨機產生 num_pairs 組 2-mix 路徑對 (spk1_wav, spk2_wav)
+#     """
+#     speaker_dirs = [os.path.join(root_dir, spk) for spk in os.listdir(root_dir)
+#                     if os.path.isdir(os.path.join(root_dir, spk))]
     
-    speaker_files = {}
-    for spk_dir in speaker_dirs:
-        all_wavs = []
-        for chapter in os.listdir(spk_dir):
-            chapter_path = os.path.join(spk_dir, chapter)
-            if os.path.isdir(chapter_path):
-                all_wavs.extend([os.path.join(chapter_path, wav) for wav in os.listdir(chapter_path) if wav.endswith('.flac') or wav.endswith('.wav')])
+#     speaker_files = {}
+#     for spk_dir in speaker_dirs:
+#         all_wavs = []
+#         for chapter in os.listdir(spk_dir):
+#             chapter_path = os.path.join(spk_dir, chapter)
+#             if os.path.isdir(chapter_path):
+#                 all_wavs.extend([os.path.join(chapter_path, wav) for wav in os.listdir(chapter_path) if wav.endswith('.flac') or wav.endswith('.wav')])
 
-        if len(all_wavs) > 1:
-            speaker_files[spk_dir] = all_wavs
+#         if len(all_wavs) > 1:
+#             speaker_files[spk_dir] = all_wavs
 
-    all_speakers = list(speaker_files.keys())
-    random.shuffle(all_speakers)
-    mix_pairs = []
+#     all_speakers = list(speaker_files.keys())
+#     random.shuffle(all_speakers)
+#     mix_pairs = []
         
-    i = 0
-    while i + 4 < len(all_speakers) and len(mix_pairs) < num_pairs:
-        # spk1, spk2, spk3 = all_speakers[i:i+3]
-        spk1, spk2, spk3, spk4 = all_speakers[i:i+4]
-        wav1 = speaker_files[spk1]
-        wav2 = speaker_files[spk2]
-        wav3 = speaker_files[spk3]
-        wav4 = speaker_files[spk4]
-        min_len = min(len(wav1), len(wav2), len(wav3), len(wav4))
-        random.shuffle(wav1)
-        random.shuffle(wav2)
-        random.shuffle(wav3)
-        random.shuffle(wav4)
-        for j in range(min_len):
-            mix_pairs.append((wav1[j], wav2[j], wav3[j], wav4[j]))
-            if len(mix_pairs) >= num_pairs:
-                break
-        i += 4  # 每次取兩個說話者
+#     i = 0
+#     while i + 3 < len(all_speakers) and len(mix_pairs) < num_pairs:
+#         # spk1, spk2, spk3 = all_speakers[i:i+3]
+#         spk1, spk2, spk3 = all_speakers[i:i+3]
+#         wav1 = speaker_files[spk1]
+#         wav2 = speaker_files[spk2]
+#         wav3 = speaker_files[spk3]
+#         # wav4 = speaker_files[spk4]
+#         min_len = min(len(wav1), len(wav2), len(wav3))
+#         random.shuffle(wav1)
+#         random.shuffle(wav2)
+#         random.shuffle(wav3)
+#         # random.shuffle(wav4)
+#         for j in range(min_len):
+#             mix_pairs.append((wav1[j], wav2[j], wav3[j]))
+#             if len(mix_pairs) >= num_pairs:
+#                 break
+#         i += 3  # 每次取兩個說話者
 
-    return mix_pairs
+#     return mix_pairs
+def prepare_data(audio_files: List[str]):
+    pattern = re.compile(r"Sample_(\d+)_\d+\.wav")
+    file_path = glob.glob(os.path.join(audio_files, "Sample_*_*.wav"))
+    file_path = sorted(file_path, key=lambda x: int(x.split('/')[-1].split('_')[1]))  # sort by Sample index
+    audio_dict = defaultdict(list)
+    for path in file_path:
+        # print(f'current path: {path}')
+        # print(path.split('_')[1])
+        # if int(path.split('/')[-1].split('_')[1]) > 211:
+        match = pattern.search(path)    
+        if match:
+            i = int(match.group(1))
+            audio_dict[i].append(path)
+
+    audio_dict = {k: sorted(v) for k, v in audio_dict.items() if len(v) == 3}  # filter out incomplete samples
+    # print(audio_dict)
+    return audio_dict # {0: ['.../Sample_0_1.wav', '.../Sample_0_2.wav'], 1: []...}
+
 
 def prepare_audio_before_degradation(x: List[torch.Tensor]) -> torch.Tensor:
     min_sample_length = min(map(lambda tensor: tensor.size(-1), x))
@@ -299,7 +318,7 @@ def save_audios(
     )
 
 def degradation(x: torch.Tensor) -> torch.Tensor:
-    return torch.stack([s for s in torch.chunk(x, 4, dim=0)]).sum(0)
+    return torch.stack([s for s in torch.chunk(x, 3, dim=0)]).sum(0)
 
 def sisnr(x, y):
         alpha = (x * y).sum(-1, keepdims=True) / (
@@ -308,7 +327,7 @@ def sisnr(x, y):
         real_samples_scaled = alpha * x
         e_target = real_samples_scaled.square().sum(-1)
         e_res = (real_samples_scaled - y).square().sum(-1)
-        return 10 * torch.log10(e_target / (e_res + 1e-9)).cpu().numpy()
+        return 10 * torch.log10(e_target / (e_res + 1e-9)).detach().cpu().numpy()
 
 if __name__ == '__main__':
     try:

@@ -62,7 +62,7 @@ def posterior_sample(cfg):
     sampler = get_sampler(sampler_config, model=model, diffusion=diffusion, degradation=degradation, operator=operator, noiser=noiser, device=device)
 
     # inference
-    output_dir = os.path.join("results_vctk_new_model_2spk_all", task_config.operator.name) # results_vctk_820k_finetune_grad_spk_condition
+    output_dir = os.path.join(cfg.output_dir, task_config.operator.name) # results_vctk_820k_finetune_grad_spk_condition
     generated_path = os.path.join(output_dir, "generated")
     original_path = os.path.join(output_dir, "original")
     degraded_path = os.path.join(output_dir, "degraded")
@@ -81,7 +81,7 @@ def posterior_sample(cfg):
         ref_samples= []
         x = load_audios(f, 16000, None, "cpu", False)
         x = prepare_audio_before_degradation(x)
-        degraded_sample = degradation(x).cpu() # y_n
+        degraded_sample = degradation(x, task_config.operator.n_spk).cpu() # y_n
 
         # ref & mask_ref
         for j, k in enumerate(files_key):
@@ -104,14 +104,13 @@ def posterior_sample(cfg):
                     "ref": ref.to(device),
                     "mask_ref": mask_ref.to(device),
                 }
-                # task_kwargs=None
             )
 
             sample_list.append(sample)
             del sample
             torch.cuda.empty_cache()
             gc.collect()
-
+  
         x = x.cpu()
         real_samples.append(x)
         n_spk = x.shape[0] # speaker num
@@ -146,7 +145,7 @@ def posterior_sample(cfg):
             degraded_sample, 
             x,
             ref, 
-            i+735, 
+            i, 
             len(audio_files), 
             sr=16000,
         )
@@ -240,8 +239,8 @@ def save_audios(
         os.path.join(degraded_path, name), degraded_sample.detach().cpu().view(1, -1), sr
     )
 
-def degradation(x: torch.Tensor) -> torch.Tensor:
-    return torch.stack([s for s in torch.chunk(x, 2, dim=0)]).sum(0)
+def degradation(x: torch.Tensor, n_spk: int) -> torch.Tensor:
+    return torch.stack([s for s in torch.chunk(x, n_spk, dim=0)]).sum(0)
 
 def sisnr(x, y):
         alpha = (x * y).sum(-1, keepdims=True) / (

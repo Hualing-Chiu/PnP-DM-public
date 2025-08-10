@@ -64,7 +64,7 @@ def posterior_sample(cfg):
     sampler = get_sampler(sampler_config, model=model, diffusion=diffusion, degradation=degradation, operator=operator, noiser=noiser, device=device)
 
     # inference
-    output_dir = os.path.join("test", task_config.operator.name) # results_vctk_820k_finetune_grad_spk_condition
+    output_dir = os.path.join("test_vctk", task_config.operator.name) # results_vctk_820k_finetune_grad_spk_condition
     generated_path = os.path.join(output_dir, "generated")
     original_path = os.path.join(output_dir, "original")
     degraded_path = os.path.join(output_dir, "degraded")
@@ -229,11 +229,8 @@ def save_audios(
     orig_chunked = torch.chunk(
         original_sample, chunks=n_spk, dim=0
     )  # explicit number of chunks 2
-    ref_chunked = torch.chunk(
-        ref, chunks=n_spk, dim=0
-    )  # explicit number of chunks 2
-
-    for i, (cur_pred, cur_orig, cur_ref) in enumerate(zip(pred_chunked, orig_chunked, ref_chunked)):
+    
+    for i, (cur_pred, cur_orig) in enumerate(zip(pred_chunked, orig_chunked)):
 
         name = f"Sample_{idx}_{i + 1}.wav"
         torchaudio.save(
@@ -242,9 +239,7 @@ def save_audios(
         torchaudio.save(
             os.path.join(original_path, name), cur_orig.detach().cpu().view(1, -1), sr
         )
-        torchaudio.save(
-            os.path.join(reference_path, name), cur_ref.detach().cpu().view(1, -1), sr
-        )
+
         print(os.path.join(reference_path, name))
 
     # redefine name for degraded

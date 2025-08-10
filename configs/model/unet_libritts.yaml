@@ -1,16 +1,5 @@
 name: unet_libritts
 
-# model:
-#   image_size: 16000
-#   in_channels: 1
-#   model_channels: 32
-#   out_channels: 1
-#   num_res_blocks: 3
-#   attention_resolutions: [32, 64, 128, 256]
-#   channel_mult: [1, 2, 2, 4, 4, 8, 8, 16, 16]
-#   dims: 1
-#   use_checkpoint: True
-#   num_head_channels: 32
 model:
   image_size: 16384
   in_channels: 1
@@ -27,6 +16,6 @@ model:
   spk_enc_layers: 2
   spk_dim: 512
 
-model_path: weights/ema_0.9999_060000.pt
+model_path: weights/ema_0.9999_050000.pt
 # model_path: weights/ema_0.9999_820000_finetune.pt
 # model_path: weights/ema_0.9999_720000.pt

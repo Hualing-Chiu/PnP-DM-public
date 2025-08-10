@@ -1,11 +1,13 @@
 name: librispeech
 
 root:
+  - /home/hualing/PnP-DM-public/results_librispeech_new_model_4spk_all/source_separation/original
+  - /home/hualing/PnP-DM-public/results_librispeech_new_model_4spk_all/source_separation/reference
   # - /media/ext_ssd/public_datasets/LibriMix/2speakers/LibriSpeech/test-clean/1188/133604/
   # - /media/ext_ssd/public_datasets/LibriMix/2speakers/LibriSpeech/test-clean/4970/29093/
   # - /home/public_datasets/LibriMix-wav16/s1
   # - /home/public_datasets/LibriMix-wav16/s2
-  - /home/public_datasets/LibriSpeech/LibriSpeech/test-clean/
+  # - /home/public_datasets/LibriSpeech/LibriSpeech/test-clean/
   # - /home/public_datasets/LibriSpeech/LibriSpeech/test-other/
 
 num_pairs: 400

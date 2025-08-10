@@ -36,6 +36,7 @@ def progressive_noise_addition(audio, sr, output_dir, steps=4, snr_range=(20, 0)
     os.makedirs(audio_dir, exist_ok=True)
     os.makedirs(spec_dir, exist_ok=True)
 
+    sf.write(os.path.join(audio_dir, "original.wav"), audio, samplerate=sr)
     plot_spectrogram(audio, sr, os.path.join(spec_dir, "original_spectrogram.png"), title="Original Audio Spectrogram")
     snr_levels = np.linspace(snr_range[0], snr_range[1], steps)
 
@@ -52,8 +53,8 @@ def progressive_noise_addition(audio, sr, output_dir, steps=4, snr_range=(20, 0)
 
 # === 步驟 5: 執行流程 ===
 if __name__ == "__main__":
-    input_path = "/home/hualing/PnP-DM-public/results_vctk_new_model_2spk_all/source_separation/original/Sample_1_1.wav"  # 替換為你的音檔路徑
-    output_folder = "/home/hualing/PnP-DM-public/noisy_outputs"
+    input_path = "/home/hualing/PnP-DM-public/results_libritts_new_model_2spk_all/source_separation/original/Sample_947_2.wav"  # 替換為你的音檔路徑
+    output_folder = "/home/hualing/PnP-DM-public/noisy_outputs_1"
     sr = 16000
 
     clean_audio = load_audio(input_path, sr=sr)

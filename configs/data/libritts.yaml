@@ -1,8 +1,9 @@
 name: libritts
 
 root:
-  - /home/public_datasets/LibriTTS_R/LibriTTS_R/test-clean/
-  # - /home/hualing/PnP-DM-public/results_libritts_new_model_2_spk_all/source_separation/original/
+  - /home/hualing/PnP-DM-public/results_libritts_new_model_4spk_all/source_separation/original/
+  - /home/hualing/PnP-DM-public/results_libritts_new_model_4spk_all/source_separation/reference/
+  # - /home/public_datasets/LibriTTS_R/LibriTTS_R/test-clean/
   # - /home/public_datasets/LibriTTS_R/LibriTTS_R/test-other/
   # 1
   # - /home/public_datasets/LibriTTS_R/LibriTTS_R/test-clean/1188/133604/

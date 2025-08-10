@@ -38,7 +38,7 @@ class PnPDDPM:
         assert self.config.num_iters - 1 in iters_count_as_sample, "num_iters-1 should be included in iters_count_as_sample"
         sub_pbar = tqdm(range(1, self.config.num_iters))
         for i in sub_pbar:
-            rho_iter = self.config.rho * (self.config.rho_decay_rate ** (i - 1))
+            rho_iter = self.config.rho * (self.config.rho_decay_rate ** (i - 1)) # 10 * (0.9 ** (i-1))
             rho_iter = max(rho_iter, self.config.rho_min)
 
             # (1 - i / N) * T      
@@ -64,11 +64,7 @@ class PnPDDPM:
             # likelihood step
             x = self.operator.proximal_generator(z, y_n, self.diffusion, t, self.noiser.sigma, rho=rho_iter)
             # x = z * (i / self.config.num_iters) + torch.randn_like(z) * (1 - i / self.config.num_iters)
-
-            # x = self.diffusion._predict_xstart_from_eps(z, t)
-            # print(torch.max(z))
-            # print(f"x.shape: {x.shape}")
-            # if i in iters_count_as_sample:
+            
             samples.append(x)
         # return torch.concat(samples, dim=0)
         return samples[-1]
